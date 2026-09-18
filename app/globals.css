@@ -116,7 +116,7 @@ body {
 
 .section-heading {
   margin: 0;
-  color: #ffffff;
+  color: #111a29;
   font-size: clamp(29px, 4vw, 43px);
   line-height: 1;
   font-weight: 900;
@@ -124,7 +124,7 @@ body {
 }
 
 .section-note {
-  color: #8e9aac;
+  color: #7084a1;
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 1px;
@@ -534,4 +534,35 @@ footer {
 
 .doubles-heading {
   color: #ce1126 !important;
+}
+
+.upcoming-heading {
+  margin: 0 0 16px;
+  color: #111a29;
+  font-size: clamp(36px, 4.8vw, 52px);
+  line-height: .94;
+  font-weight: 900;
+  letter-spacing: -2px;
+}
+
+.upcoming-main {
+  min-width: 0;
+}
+
+.upcoming-copy {
+  max-width: 680px;
+  margin: 18px 0 0;
+  color: #aab8cb;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.upcoming-meta {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 500px) {
+  .upcoming-heading {
+    font-size: 34px;
+  }
 }
