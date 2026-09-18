@@ -9,8 +9,8 @@ body {
 }
 
 body {
-  background: #101827;
-  color: #ffffff;
+  background: #f5f5f3;
+  color: #111a29;
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -21,7 +21,6 @@ body {
   padding: 48px 32px 72px;
 }
 
-/* BBD/Hamza-style top treatment, adapted with restrained Philippine accents. */
 .top-row {
   display: flex;
   align-items: center;
@@ -30,6 +29,7 @@ body {
 
 .main-heading {
   margin: 0;
+  color: #111a29;
   font-size: clamp(42px, 5.3vw, 64px);
   line-height: .94;
   font-weight: 900;
@@ -38,7 +38,17 @@ body {
 }
 
 .alex-name {
-  color: #fcd116;
+  color: #ffffff;
+}
+
+.alex-a,
+.alex-e {
+  color: #ce1126;
+}
+
+.alex-l,
+.alex-x {
+  color: #0039a6;
 }
 
 .top-image-wrap {
@@ -54,10 +64,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: #7084a1;
   font-size: 13px;
   font-weight: 900;
-  border: 1px dashed rgba(255, 255, 255, .32);
+  border: 1px dashed #c7d1df;
   border-radius: 50%;
   background: transparent;
 }
@@ -72,6 +82,7 @@ body {
   justify-content: center;
   border-radius: 999px;
   background: #ffffff;
+  border: 2px solid #fcd116;
   font-size: 65px;
   line-height: 1;
   font-weight: 900;
@@ -79,11 +90,19 @@ body {
 }
 
 .answer.pending {
-  color: #6b7688;
+  color: #7084a1;
 }
 
-/* Section heading follows the simple BBD/Hamza hierarchy. */
-.result-section {
+.answer.yes {
+  color: #0039a6;
+}
+
+.answer.no {
+  color: #ce1126;
+}
+
+.result-section,
+.upcoming-section {
   margin-top: 34px;
 }
 
@@ -111,10 +130,11 @@ body {
   letter-spacing: 1px;
 }
 
-/* Dark cards: navy + thin Philippine-yellow trim. */
+/* Latest result: white BBD-style card with restrained red trim. */
 .result-card {
-  background: #111a29;
-  border: 1px solid #fcd116;
+  background: #ffffff;
+  color: #090d13;
+  border: 2px solid #ce1126;
   border-radius: 28px;
   padding: 32px;
 }
@@ -134,12 +154,12 @@ body {
 }
 
 .result-card .section-label {
-  color: #c2cfdf;
+  color: #7084a1;
 }
 
 .match-title {
   margin-top: 10px;
-  color: #ffffff;
+  color: #111a29;
   font-size: clamp(28px, 4vw, 43px);
   line-height: 1;
   font-weight: 900;
@@ -148,13 +168,13 @@ body {
 
 .match-date {
   margin-top: 12px;
-  color: #aab8cb;
+  color: #7084a1;
   font-size: 14px;
 }
 
 .result-score {
   flex: 0 0 auto;
-  color: #ffffff;
+  color: #111a29;
   font-size: 58px;
   line-height: .9;
   font-weight: 900;
@@ -163,7 +183,7 @@ body {
 .players-row {
   margin-top: 28px;
   padding-top: 25px;
-  border-top: 1px solid rgba(255, 255, 255, .12);
+  border-top: 1px solid #dfe4ea;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   gap: 24px;
@@ -179,7 +199,7 @@ body {
 }
 
 .player-label {
-  color: #aab8cb;
+  color: #7084a1;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 1.2px;
@@ -187,14 +207,14 @@ body {
 
 .player-name {
   margin-top: 6px;
-  color: #ffffff;
+  color: #090d13;
   font-size: 25px;
   line-height: 1.08;
   font-weight: 900;
 }
 
 .vs {
-  color: #fcd116;
+  color: #0039a6;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 1px;
@@ -211,12 +231,12 @@ body {
   min-height: 86px;
   padding: 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, .055);
+  background: #f3f6f8;
 }
 
 .match-details span {
   display: block;
-  color: #aab8cb;
+  color: #7084a1;
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 1px;
@@ -225,18 +245,85 @@ body {
 .match-details strong {
   display: block;
   margin-top: 8px;
-  color: #ffffff;
+  color: #111a29;
   font-size: 18px;
   font-weight: 900;
 }
 
-/* White information cards remain unchanged in concept. */
+/* Upcoming fixture: dark family card, yellow trim. */
+.upcoming-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 1fr);
+  gap: 30px;
+  align-items: center;
+  background: #111a29;
+  color: #ffffff;
+  border: 1px solid #fcd116;
+  border-radius: 28px;
+  padding: 32px;
+}
+
+.upcoming-card .section-label {
+  color: #c2cfdf;
+}
+
+.upcoming-title {
+  margin-top: 10px;
+  color: #ffffff;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -1.6px;
+}
+
+.upcoming-date {
+  margin-top: 12px;
+  color: #aab8cb;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.upcoming-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.upcoming-meta > div {
+  min-height: 92px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.055);
+}
+
+.upcoming-meta span {
+  display: block;
+  color: #aab8cb;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.upcoming-meta strong {
+  display: block;
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+/* White information cards. */
 .section-card {
   margin-top: 30px;
   padding: 34px;
   background: #ffffff;
   color: #090d13;
+  border: 1px solid #dddcd6;
   border-radius: 28px;
+}
+
+.section-card--red {
+  border: 2px solid #ce1126;
 }
 
 .section-card .section-label {
@@ -372,7 +459,8 @@ footer {
     padding: 0 20px;
   }
 
-  .match-main {
+  .match-main,
+  .upcoming-card {
     display: block;
   }
 
@@ -389,8 +477,13 @@ footer {
     text-align: left;
   }
 
-  .match-details {
+  .match-details,
+  .upcoming-meta {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .upcoming-meta {
+    margin-top: 24px;
   }
 
   .bio-layout,
@@ -400,7 +493,8 @@ footer {
   }
 
   .section-card,
-  .result-card {
+  .result-card,
+  .upcoming-card {
     padding: 27px 22px;
     border-radius: 25px;
   }
@@ -429,7 +523,8 @@ footer {
     font-size: 29px;
   }
 
-  .match-details {
+  .match-details,
+  .upcoming-meta {
     grid-template-columns: 1fr 1fr;
   }
 }
