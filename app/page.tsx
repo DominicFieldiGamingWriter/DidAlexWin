@@ -14,11 +14,6 @@ export default function Home() {
       </div>
 
       <section className="result-section">
-        <div className="section-heading-row">
-          <h2 className="section-heading">LATEST RESULT</h2>
-          <span className="section-note">API DATA</span>
-        </div>
-
         <div className="result-card">
           <div className="match-main">
             <div className="match-context">
