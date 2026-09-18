@@ -134,7 +134,7 @@ body {
 .result-card {
   background: #ffffff;
   color: #090d13;
-  border: 2px solid #ce1126;
+  border: 2px solid #fcd116;
   border-radius: 28px;
   padding: 32px;
 }
@@ -258,7 +258,7 @@ body {
   align-items: center;
   background: #111a29;
   color: #ffffff;
-  border: 1px solid #fcd116;
+  border: 1px solid #ce1126;
   border-radius: 28px;
   padding: 32px;
 }
@@ -324,7 +324,7 @@ body {
 
 .section-card--red,
 .grand-slam-card {
-  border: 2px solid #ce1126;
+  border: 2px solid #fcd116;
 }
 
 .career-card {
@@ -332,7 +332,7 @@ body {
   padding: 34px;
   background: #111a29;
   color: #ffffff;
-  border: 1px solid #fcd116;
+  border: 1px solid #ce1126;
   border-radius: 28px;
 }
 
@@ -356,12 +356,9 @@ body {
   color: #ffffff;
 }
 
-.career-card .stats-column h3 {
-  color: #0039a6;
-}
-
+.career-card .stats-column h3,
 .career-card .stats-column .doubles-heading {
-  color: #ce1126 !important;
+  color: #fcd116 !important;
 }
 
 .section-card .section-label {
@@ -628,4 +625,11 @@ footer {
     padding: 27px 22px;
     border-radius: 25px;
   }
+}
+
+.grand-slam-card .grand-slam-grid h3,
+.grand-slam-card .grand-slam-grid .doubles-heading,
+.grand-slam-card .stats-column h3,
+.grand-slam-card .doubles-heading {
+  color: #0039a6 !important;
 }
