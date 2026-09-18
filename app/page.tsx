@@ -103,24 +103,60 @@ export default function Home() {
               data source.
             </p>
             <p>
-              The page will use the same data layer for her player profile,
-              rankings and match history.
+              Eala first attracted international attention as a junior and has
+              since progressed onto the professional tour, competing across
+              singles and doubles events.
+            </p>
+            <p>
+              This biography area will provide a concise overview of her career,
+              including major milestones, tournament appearances and ranking
+              progress.
+            </p>
+            <p>
+              Her match history will be updated independently from the biography,
+              so this section can remain focused on who Alex is rather than what
+              happened in her latest match.
+            </p>
+            <p>
+              The final version will use verified profile details and carefully
+              sourced career information rather than static placeholder copy.
+            </p>
+            <p>
+              It will also give visitors useful context before they move into the
+              live result, upcoming fixture and statistical sections below.
+            </p>
+            <p>
+              Singles and doubles achievements will both be represented so the
+              page reflects the full range of Eala&apos;s tennis career.
+            </p>
+            <p>
+              Grand Slam appearances and results will be presented separately
+              where the underlying data supports them.
+            </p>
+            <p>
+              Ranking information will be refreshed from the same data layer used
+              elsewhere on the site.
+            </p>
+            <p>
+              This is placeholder copy for layout testing only and will be
+              replaced with the finished biography once the data and editorial
+              content are ready.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="section-card">
-        <h2 className="section-title">CAREER &amp; GRAND SLAM RECORD</h2>
+      <section className="career-card">
+        <h2 className="section-title">CAREER RECORD</h2>
 
         <div className="stats-grid">
           <div className="stats-column">
             <h3>SINGLES</h3>
             <div className="stats-list">
-              <div><span>Career record</span><strong>—</strong></div>
-              <div><span>Career titles</span><strong>—</strong></div>
-              <div><span>Highest ranking</span><strong>—</strong></div>
-              <div><span>Current ranking</span><strong>—</strong></div>
+              <div><span>Career record</span><strong>40–21</strong></div>
+              <div><span>Career titles</span><strong>1</strong></div>
+              <div><span>Highest ranking</span><strong>No. 18</strong></div>
+              <div><span>Current ranking</span><strong>No. 18</strong></div>
             </div>
           </div>
 
@@ -134,6 +170,10 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="section-card grand-slam-card">
+        <h2 className="section-title">GRAND SLAM RECORD</h2>
 
         <div className="grand-slam-grid">
           <div>
@@ -147,7 +187,7 @@ export default function Home() {
           </div>
 
           <div>
-            <h3>GRAND SLAM DOUBLES</h3>
+            <h3 className="doubles-heading">GRAND SLAM DOUBLES</h3>
             <div className="slam-list">
               <div><span>Australian Open</span><strong>—</strong></div>
               <div><span>French Open</span><strong>—</strong></div>

@@ -322,8 +322,46 @@ body {
   border-radius: 28px;
 }
 
-.section-card--red {
+.section-card--red,
+.grand-slam-card {
   border: 2px solid #ce1126;
+}
+
+.career-card {
+  margin-top: 30px;
+  padding: 34px;
+  background: #111a29;
+  color: #ffffff;
+  border: 1px solid #fcd116;
+  border-radius: 28px;
+}
+
+.career-card .section-title {
+  color: #ffffff;
+}
+
+.career-card .stats-list {
+  border-top-color: rgba(255,255,255,.18);
+}
+
+.career-card .stats-list > div {
+  border-bottom-color: rgba(255,255,255,.10);
+}
+
+.career-card .stats-list span {
+  color: #aab8cb;
+}
+
+.career-card .stats-list strong {
+  color: #ffffff;
+}
+
+.career-card .stats-column h3 {
+  color: #0039a6;
+}
+
+.career-card .stats-column .doubles-heading {
+  color: #ce1126 !important;
 }
 
 .section-card .section-label {
@@ -578,4 +616,16 @@ footer {
 
 .grand-slam-grid > div:first-child h3 {
   color: #fcd116;
+}
+
+.grand-slam-card {
+  margin-top: 30px;
+}
+
+@media (max-width: 820px) {
+  .career-card,
+  .grand-slam-card {
+    padding: 27px 22px;
+    border-radius: 25px;
+  }
 }
