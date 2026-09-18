@@ -1,168 +1,140 @@
-const statRows = [
-  ["Career record", "—", "—"],
-  ["Career titles", "—", "—"],
-  ["Highest ranking", "—", "—"],
-  ["Current ranking", "—", "—"],
-];
-
-const grandSlams = ["Australian Open", "French Open", "Wimbledon", "US Open"];
-
-export default function HomePage() {
+export default function Home() {
   return (
-    <main className="site-shell">
-      <header className="site-header">
-        <div className="brand-mark">
-          <span className="brand-dot" aria-hidden="true" />
-          <span>Did Alex Win?</span>
-        </div>
-        <span className="header-country">PHILIPPINES</span>
-      </header>
+    <main className="page">
+      <div className="top-row">
+        <h1 className="main-heading">
+          DID <span className="alex-name">ALEX</span> WIN?
+        </h1>
 
-      <section className="hero-card" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <p className="eyebrow">Alexandra Eala</p>
-          <h1 id="hero-title">Did Alex Win?</h1>
-          <p className="hero-intro">
-            The latest result, career record and Grand Slam history of the Philippines&apos;
-            leading tennis player.
-          </p>
-          <div className="result-badge result-badge--pending">UPDATING RESULTS</div>
+        <div className="top-image-wrap" aria-hidden="true">
+          <div className="top-image-placeholder">ALEX</div>
         </div>
 
-        <div className="hero-figure" aria-label="Alexandra Eala image placeholder">
-          <div className="figure-placeholder">
-            <span>Alex image</span>
-            <small>Happy / sad asset goes here</small>
+        <div className="answer pending">—</div>
+      </div>
+
+      <section className="result-section">
+        <div className="section-heading-row">
+          <h2 className="section-heading">LATEST RESULT</h2>
+          <span className="section-note">API DATA</span>
+        </div>
+
+        <div className="result-card">
+          <div className="match-main">
+            <div className="match-context">
+              <div className="section-label">TOURNAMENT</div>
+              <div className="match-title">Waiting for Eala match data</div>
+              <div className="match-date">Singles or doubles · Automatically updated</div>
+            </div>
+
+            <div className="result-score">—</div>
+          </div>
+
+          <div className="players-row">
+            <div className="player-side player-side-left">
+              <div className="player-label">ALEXANDRA EALA</div>
+              <div className="player-name">Alexandra Eala</div>
+            </div>
+
+            <div className="vs">VS</div>
+
+            <div className="player-side player-side-right">
+              <div className="player-label">OPPONENT</div>
+              <div className="player-name">Opponent</div>
+            </div>
+          </div>
+
+          <div className="match-details">
+            <div>
+              <span>ROUND</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>SURFACE</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>DURATION</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>VENUE</span>
+              <strong>—</strong>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="section-card latest-card">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">Latest result</p>
-            <h2>Most recent match</h2>
-          </div>
-          <span className="live-dot"><span /> API powered</span>
-        </div>
+      <section className="section-card">
+        <div className="section-label">ABOUT</div>
+        <h2 className="section-title">ALEXANDRA EALA</h2>
 
-        <div className="match-placeholder">
-          <div className="match-meta">
-            <span>Tournament</span>
-            <strong>Waiting for live data</strong>
-          </div>
-          <div className="match-date">
-            <span>Round</span>
-            <strong>—</strong>
-          </div>
-
-          <div className="match-players">
-            <div className="player-block">
-              <span className="player-label">Alexandra Eala</span>
-              <strong className="player-name">Alexandra Eala</strong>
-            </div>
-            <div className="versus">VS</div>
-            <div className="player-block player-block--opponent">
-              <span className="player-label">Opponent</span>
-              <strong className="player-name">Opponent</strong>
-            </div>
-          </div>
-
-          <div className="score-placeholder" aria-label="Match score placeholder">
-            <span>—</span><span>—</span><span>—</span>
-          </div>
-
-          <div className="match-stats">
-            <div><span>Result</span><strong>—</strong></div>
-            <div><span>Duration</span><strong>—</strong></div>
-            <div><span>Surface</span><strong>—</strong></div>
-            <div><span>Venue</span><strong>—</strong></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section-card about-card">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">About</p>
-            <h2>Alexandra Eala</h2>
-          </div>
-        </div>
-        <div className="about-grid">
-          <div className="about-image-placeholder">Bio image</div>
-          <div className="about-copy">
+        <div className="bio-layout">
+          <div className="bio-image-placeholder">BIO IMAGE</div>
+          <div className="bio-copy">
             <p>
-              Alexandra Eala is a professional tennis player from the Philippines. This
-              section will use the verified player profile and biography data once the
-              data layer is connected.
+              Alexandra Eala is a professional tennis player from the Philippines.
+              Verified profile information will be connected here from the tennis
+              data source.
             </p>
-            <p className="muted">
-              Profile data will be refreshed separately from match results.
+            <p>
+              The page will use the same data layer for her player profile,
+              rankings and match history.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="section-card stats-card">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">Career</p>
-            <h2>Career &amp; Grand Slam record</h2>
-          </div>
-        </div>
+      <section className="section-card">
+        <div className="section-label">CAREER</div>
+        <h2 className="section-title">CAREER &amp; GRAND SLAM RECORD</h2>
 
-        <div className="stats-table-wrap">
-          <div className="stats-columns">
-            <div className="stats-column">
-              <h3>Singles</h3>
-              <div className="stats-list">
-                {statRows.map(([label, singles]) => (
-                  <div className="stats-row" key={label}>
-                    <span>{label}</span>
-                    <strong>{singles}</strong>
-                  </div>
-                ))}
-              </div>
+        <div className="stats-grid">
+          <div className="stats-column">
+            <h3>SINGLES</h3>
+            <div className="stats-list">
+              <div><span>Career record</span><strong>—</strong></div>
+              <div><span>Career titles</span><strong>—</strong></div>
+              <div><span>Highest ranking</span><strong>—</strong></div>
+              <div><span>Current ranking</span><strong>—</strong></div>
             </div>
+          </div>
 
-            <div className="stats-column">
-              <h3>Doubles</h3>
-              <div className="stats-list">
-                {statRows.map(([label, , doubles]) => (
-                  <div className="stats-row" key={label}>
-                    <span>{label}</span>
-                    <strong>{doubles}</strong>
-                  </div>
-                ))}
-              </div>
+          <div className="stats-column">
+            <h3>DOUBLES</h3>
+            <div className="stats-list">
+              <div><span>Career record</span><strong>—</strong></div>
+              <div><span>Career titles</span><strong>—</strong></div>
+              <div><span>Highest ranking</span><strong>—</strong></div>
+              <div><span>Current ranking</span><strong>—</strong></div>
             </div>
           </div>
         </div>
 
         <div className="grand-slam-grid">
           <div>
-            <h3>Grand Slam singles</h3>
-            {grandSlams.map((event) => (
-              <div className="grand-slam-row" key={`singles-${event}`}>
-                <span>{event}</span><strong>—</strong>
-              </div>
-            ))}
+            <h3>GRAND SLAM SINGLES</h3>
+            <div className="slam-list">
+              <div><span>Australian Open</span><strong>—</strong></div>
+              <div><span>French Open</span><strong>—</strong></div>
+              <div><span>Wimbledon</span><strong>—</strong></div>
+              <div><span>US Open</span><strong>—</strong></div>
+            </div>
           </div>
+
           <div>
-            <h3>Grand Slam doubles</h3>
-            {grandSlams.map((event) => (
-              <div className="grand-slam-row" key={`doubles-${event}`}>
-                <span>{event}</span><strong>—</strong>
-              </div>
-            ))}
+            <h3>GRAND SLAM DOUBLES</h3>
+            <div className="slam-list">
+              <div><span>Australian Open</span><strong>—</strong></div>
+              <div><span>French Open</span><strong>—</strong></div>
+              <div><span>Wimbledon</span><strong>—</strong></div>
+              <div><span>US Open</span><strong>—</strong></div>
+            </div>
           </div>
         </div>
       </section>
 
-      <footer className="site-footer">
-        <span>Did Alex Win?</span>
-        <span>Alexandra Eala · Philippines</span>
-      </footer>
+      <footer>Did Alex Win? · Alexandra Eala · Philippines</footer>
     </main>
   );
 }
