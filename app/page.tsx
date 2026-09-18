@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export default function Home() {
   return (
     <main className="page">
@@ -7,7 +9,14 @@ export default function Home() {
         </h1>
 
         <div className="top-image-wrap" aria-hidden="true">
-          <div className="top-image-placeholder">ALEX</div>
+          <Image
+            className="top-image"
+            src="/alex-happy.webp"
+            alt=""
+            width={128}
+            height={128}
+            priority
+          />
         </div>
 
         <div className="answer pending">—</div>
@@ -95,7 +104,15 @@ export default function Home() {
         <h2 className="section-title about-title">ABOUT ALEXANDRA EALA</h2>
 
         <div className="bio-layout">
-          <div className="bio-image-placeholder">BIO IMAGE</div>
+          <div className="bio-image-wrap">
+            <Image
+              className="bio-image"
+              src="/alex-bio.webp"
+              alt="Alexandra Eala"
+              width={360}
+              height={321}
+            />
+          </div>
           <div className="bio-copy">
             <p>
               Alexandra Eala is a professional tennis player from the Philippines.

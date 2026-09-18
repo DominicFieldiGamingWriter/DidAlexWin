@@ -58,18 +58,12 @@ body {
   justify-content: center;
 }
 
-.top-image-placeholder {
+.top-image {
   width: 108px;
   height: 108px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #7084a1;
-  font-size: 13px;
-  font-weight: 900;
-  border: 1px dashed #c7d1df;
-  border-radius: 50%;
-  background: transparent;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(0,0,0,.12));
 }
 
 .answer {
@@ -381,20 +375,22 @@ body {
   margin-bottom: 18px;
 }
 
-.bio-image-placeholder {
+.bio-image-wrap {
   float: right;
   width: 210px;
   height: 210px;
   margin: 0 0 18px 28px;
   border-radius: 18px;
+  overflow: hidden;
   background: #f1f4f7;
-  border: 1px dashed #c7d1df;
-  display: grid;
-  place-items: center;
-  color: #7084a1;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 1px;
+}
+
+.bio-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .bio-copy {
@@ -484,7 +480,7 @@ footer {
     margin-left: 0;
   }
 
-  .top-image-placeholder {
+  .top-image {
     width: 80px;
     height: 80px;
   }
@@ -543,7 +539,7 @@ footer {
     font-size: 37px;
   }
 
-  .top-image-placeholder {
+  .top-image {
     width: 74px;
     height: 74px;
   }
