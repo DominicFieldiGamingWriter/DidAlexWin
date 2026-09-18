@@ -200,7 +200,7 @@ body {
 }
 
 .player-name {
-  margin-top: 6px;
+  margin-top: 0;
   color: #090d13;
   font-size: 25px;
   line-height: 1.08;
@@ -624,8 +624,10 @@ footer {
 }
 
 .grand-slam-card .grand-slam-grid h3,
-.grand-slam-card .grand-slam-grid .doubles-heading,
-.grand-slam-card .stats-column h3,
-.grand-slam-card .doubles-heading {
+.grand-slam-card .grand-slam-grid .doubles-heading {
   color: #0039a6 !important;
+}
+
+.grand-slam-card .grand-slam-grid .doubles-heading {
+  color: #ce1126 !important;
 }

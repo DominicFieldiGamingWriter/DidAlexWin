@@ -36,14 +36,12 @@ export default function Home() {
 
           <div className="players-row">
             <div className="player-side player-side-left">
-              <div className="player-label">ALEXANDRA EALA</div>
               <div className="player-name">Alexandra Eala</div>
             </div>
 
             <div className="vs">VS</div>
 
             <div className="player-side player-side-right">
-              <div className="player-label">OPPONENT</div>
               <div className="player-name">Opponent</div>
             </div>
           </div>
@@ -194,7 +192,7 @@ export default function Home() {
 
         <div className="grand-slam-grid">
           <div>
-            <h3>GRAND SLAM SINGLES</h3>
+            <h3>SINGLES</h3>
             <div className="slam-list">
               <div><span>Australian Open</span><strong>—</strong></div>
               <div><span>French Open</span><strong>—</strong></div>
@@ -204,7 +202,7 @@ export default function Home() {
           </div>
 
           <div>
-            <h3 className="doubles-heading">GRAND SLAM DOUBLES</h3>
+            <h3 className="doubles-heading">DOUBLES</h3>
             <div className="slam-list">
               <div><span>Australian Open</span><strong>—</strong></div>
               <div><span>French Open</span><strong>—</strong></div>
