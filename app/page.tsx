@@ -62,8 +62,7 @@ export default function Home() {
 
       <section className="upcoming-section">
         <div className="section-heading-row">
-          <h2 className="section-heading">UPCOMING FIXTURE</h2>
-          <span className="section-note">NO UPCOMING MATCH DATA YET</span>
+          <h2 className="section-heading">Who does Alex play next?</h2>
         </div>
 
         <div className="upcoming-card">
@@ -93,8 +92,7 @@ export default function Home() {
       </section>
 
       <section className="section-card section-card--red">
-        <div className="section-label">ABOUT</div>
-        <h2 className="section-title">ALEXANDRA EALA</h2>
+        <h2 className="section-title about-title">ABOUT ALEXANDRA EALA</h2>
 
         <div className="bio-layout">
           <div className="bio-image-placeholder">BIO IMAGE</div>
@@ -113,7 +111,6 @@ export default function Home() {
       </section>
 
       <section className="section-card">
-        <div className="section-label">CAREER</div>
         <h2 className="section-title">CAREER &amp; GRAND SLAM RECORD</h2>
 
         <div className="stats-grid">
@@ -128,7 +125,7 @@ export default function Home() {
           </div>
 
           <div className="stats-column">
-            <h3>DOUBLES</h3>
+            <h3 className="doubles-heading">DOUBLES</h3>
             <div className="stats-list">
               <div><span>Career record</span><strong>—</strong></div>
               <div><span>Career titles</span><strong>—</strong></div>
