@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" role="img" aria-label="Philippine flag">
+  <rect width="24" height="16" fill="#0038A8"/>
+  <rect y="8" width="24" height="8" fill="#CE1126"/>
+  <path d="M0 0 L0 16 L9.24 8 Z" fill="#FFFFFF"/>
+  <circle cx="3.05" cy="8" r="1.45" fill="#FCD116"/>
+  <g fill="#FCD116">
+    <path d="M3.05 4.15 l.35 1.05 h1.1 l-.9.65 .35 1.05 -.9-.65 -.9.65 .35-1.05 -.9-.65 h1.1 z"/>
+    <path d="M3.05 8.8 l.35 1.05 h1.1 l-.9.65 .35 1.05 -.9-.65 -.9.65 .35-1.05 -.9-.65 h1.1 z"/>
+    <path d="M7.05 6.48 l.35 1.05 h1.1 l-.9.65 .35 1.05 -.9-.65 -.9.65 .35-1.05 -.9-.65 h1.1 z"/>
+  </g>
+  <g stroke="#FCD116" stroke-width=".28" stroke-linecap="round">
+    <line x1="3.05" y1="5.7" x2="3.05" y2="10.3"/>
+    <line x1="1" y1="8" x2="5.1" y2="8"/>
+    <line x1="1.6" y1="6.55" x2="4.5" y2="9.45"/>
+    <line x1="1.6" y1="9.45" x2="4.5" y2="6.55"/>
+    <line x1="3.05" y1="6.55" x2="4.5" y2="9.45"/>
+    <line x1="3.05" y1="9.45" x2="4.5" y2="6.55"/>
+  </g>
+</svg>
