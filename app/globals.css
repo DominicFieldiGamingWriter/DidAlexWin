@@ -385,7 +385,7 @@ body {
 
 .stats-column h3,
 .grand-slam-grid h3 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   color: #0039a6;
   font-size: 20px;
   line-height: 1;
@@ -565,4 +565,17 @@ footer {
   .upcoming-heading {
     font-size: 34px;
   }
+}
+
+.grand-slam-grid {
+  padding-top: 6px;
+}
+
+.grand-slam-grid h3 {
+  margin-top: 0;
+  padding-top: 2px;
+}
+
+.grand-slam-grid > div:first-child h3 {
+  color: #fcd116;
 }
