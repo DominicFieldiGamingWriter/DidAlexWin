@@ -3,7 +3,7 @@ export default function Home() {
     <main className="page">
       <div className="top-row">
         <h1 className="main-heading">
-          DID <span className="alex-name">ALEX</span> WIN?
+          DID <span className="alex-name"><span className="alex-a">A</span><span className="alex-l">L</span><span className="alex-e">E</span><span className="alex-x">X</span></span> WIN?
         </h1>
 
         <div className="top-image-wrap" aria-hidden="true">
@@ -65,7 +65,39 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className="upcoming-section">
+        <div className="section-heading-row">
+          <h2 className="section-heading">UPCOMING FIXTURE</h2>
+          <span className="section-note">NO UPCOMING MATCH DATA YET</span>
+        </div>
+
+        <div className="upcoming-card">
+          <div>
+            <div className="section-label">NEXT MATCH</div>
+            <div className="upcoming-title">Waiting for scheduled fixture</div>
+            <div className="upcoming-date">
+              The next Alexandra Eala match will appear here automatically.
+            </div>
+          </div>
+
+          <div className="upcoming-meta">
+            <div>
+              <span>DATE</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>TOURNAMENT</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>OPPONENT</span>
+              <strong>—</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-card section-card--red">
         <div className="section-label">ABOUT</div>
         <h2 className="section-title">ALEXANDRA EALA</h2>
 
