@@ -12,7 +12,7 @@ function records(payload: unknown, key = ""): Row[] {
   if (Array.isArray(payload)) return payload.filter((v): v is Row => !!v && typeof v === "object");
   if (!payload || typeof payload !== "object") return [];
   const o = payload as Row;
-  const v = key ? o[key] : o.content ?? o.matches ?? o.players;
+  const v = key ? o[key] : o.content ?? o.matches ?? o.players ?? o.events;
   return Array.isArray(v) ? v.filter((x): x is Row => !!x && typeof x === "object") : [];
 }
 function exactDate(m: Row) {
