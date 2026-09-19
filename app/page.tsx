@@ -63,8 +63,12 @@ function titleCase(value: unknown) {
 
 function formatTournament(value: unknown) {
   const text = titleCase(value);
-  if (text === "Us Open") return "US Open";
-  return text;
+  const withoutSponsor = text
+    .replace(/\s+Presented By\s+.*?(?=\s+-\s+|$)/i, "")
+    .trim();
+  const concise = withoutSponsor.split(/\s+-\s+/)[0]?.trim() || withoutSponsor;
+  if (concise === "Us Open") return "US Open";
+  return concise;
 }
 
 function parseScores(value: unknown) {
