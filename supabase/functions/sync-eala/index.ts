@@ -115,8 +115,12 @@ async function sync(){
     if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.d,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify(m)]);}
     else {
       try {
-        const tournamentPayload = await getJson(WTA+"/tournaments?page=0&pageSize=100");
-        const upcomingTournaments = records(tournamentPayload,"tournaments")
+        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const tournamentPayload = await getJson(
+          WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to
+        );
+        const upcomingTournaments = records(tournamentPayload)
           .map(item => {
             const group = item.tournamentGroup && typeof item.tournamentGroup === "object" ? item.tournamentGroup as Row : {};
             return {
