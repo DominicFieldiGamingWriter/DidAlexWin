@@ -40,25 +40,15 @@ async function getJson(path: string) {
 
 export async function GET() {
   try {
-    const [profile, pastMatches, upcoming] = await Promise.all([
-      getJson(
-        `/tennis/v2/wta/player/profile/${PLAYER_ID}?include=form,ranking,country`
-      ),
-      getJson(
-        `/tennis/v2/wta/player/past-matches/${PLAYER_ID}?pageNo=1&pageSize=5&include=round,tournament.court,tournament.rank,stat`
-      ),
-      getJson(
-        `/tennis/v2/wta/fixtures/player/${PLAYER_ID}?pageNo=1&pageSize=10&include=round,tournament.court,tournament.rank,h2h,odds&filter=PlayerGroup:both`
-      ),
-    ]);
+    const profile = await getJson(
+      `/tennis/v2/wta/player/profile/${PLAYER_ID}?include=form,ranking,country`
+    );
 
     return Response.json({
       ok: true,
       playerId: PLAYER_ID,
       source: RAPIDAPI_HOST,
       profile,
-      pastMatches,
-      upcoming,
     });
   } catch (error) {
     return Response.json(
