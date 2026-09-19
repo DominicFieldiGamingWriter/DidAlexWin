@@ -1,4 +1,6 @@
 import Image from "next/image";
+
+export const dynamic = "force-dynamic";
 import { getEalaDashboard } from "../lib/wta";
 
 function formatDate(value: unknown) {
