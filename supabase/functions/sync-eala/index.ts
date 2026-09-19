@@ -68,6 +68,14 @@ async function upsertMatches(list:Row[],category:string){
   return rows.length;
 }
 
+async function authorized(req: Request) {
+  const header = req.headers.get("authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) return false;
+  const rows = await q("select decrypted_secret from vault.decrypted_secrets where name = $1 limit 1", ["eala_sync_token"]);
+  return token === String(rows[0]?.decrypted_secret ?? "");
+}
+
 async function sync(){
   const recent=await q("select started_at from public.eala_sync_runs order by started_at desc limit 1");
   if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<240000)return {skipped:true};
@@ -179,4 +187,13 @@ function playerIdsMatch(value: unknown): boolean {
   if (typeof value === "object" && value !== null) return Object.values(value as Row).some(playerIdsMatch);
   return false;
 }
-Deno.serve(async(req)=>{if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});try{return Response.json(await sync());}catch(e){console.error(e);return Response.json({ok:false,error:e instanceof Error?e.message:"Sync failed"},{status:500});}});
+Deno.serve(async(req)=>{
+  if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
+  try{
+    if(!(await authorized(req))) return Response.json({ok:false,error:"Unauthorized"},{status:401});
+    return Response.json(await sync());
+  }catch(e){
+    console.error(e);
+    return Response.json({ok:false,error:e instanceof Error?e.message:"Sync failed"},{status:500});
+  }
+});
