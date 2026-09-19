@@ -114,6 +114,22 @@ function roundText(round: unknown) {
 
 export default async function Home() {
   const data = await getEalaDashboard();
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin-site.vercel.app";
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Did Alex Win?",
+    url: siteUrl,
+    description:
+      "Alexandra Eala match results, rankings, upcoming fixtures and Grand Slam record.",
+    about: {
+      "@type": "Person",
+      name: "Alexandra Eala",
+      url: "https://www.wtatennis.com/players/330332/name/alexandra-eala",
+      image: new URL("/alex-bio.webp", siteUrl).toString(),
+    },
+  };
   const latest = data.latestMatch;
   const answer = resultText(latest);
   const won = answer === "YES";
@@ -122,6 +138,10 @@ export default async function Home() {
 
   return (
     <main className="page">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <RefreshOnInterval />
 
       <div className="top-row">
