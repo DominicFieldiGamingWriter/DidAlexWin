@@ -274,23 +274,6 @@ function buildGrandSlams(matches: WtaMatch[]) {
   return result;
 }
 
-function exactMatchDate(match: WtaMatch): string {
-  const candidates = [
-    match.matchDate,
-    match.match_date,
-    match.scheduledTime,
-    match.scheduled_time,
-    match.date,
-  ];
-
-  for (const candidate of candidates) {
-    const text = stringValue(candidate);
-    if (text && !Number.isNaN(Date.parse(text))) return text;
-  }
-
-  return "";
-}
-
 function formatDate(value: string): string {
   if (!value) return "TBA";
   const date = new Date(value);
