@@ -11,7 +11,7 @@ export default function Home() {
         <div className="top-image-wrap" aria-hidden="true">
           <Image
             className="top-image"
-            src="/alex-happy.webp"
+            src="/happy-alex.png"
             alt=""
             width={128}
             height={128}
