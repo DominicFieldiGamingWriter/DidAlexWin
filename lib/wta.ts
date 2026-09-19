@@ -198,24 +198,34 @@ async function findRank(
   type: "rankSingles" | "rankDoubles",
   metric: "singles" | "doubles"
 ): Promise<number | null> {
-  try {
-    const payload = await getJson(
-      `${BASE}/players/ranked?type=${type}&metric=${metric}&page=0&pageSize=200`
-    );
+  const pageSize = 200;
 
-    const row = records(payload).find((item) => {
-      const player = item.player;
-      return (
-        typeof player === "object" &&
-        player !== null &&
-        String((player as Record<string, unknown>).id) === String(EALA_ID)
+  for (let page = 0; page < 10; page += 1) {
+    try {
+      const payload = await getJson(
+        `${BASE}/players/ranked?type=${type}&metric=${metric}&page=${page}&pageSize=${pageSize}`
       );
-    });
 
-    return numberValue(row?.ranking);
-  } catch {
-    return null;
+      const rows = records(payload);
+      const row = rows.find((item) => {
+        const player = item.player;
+        return (
+          typeof player === "object" &&
+          player !== null &&
+          String((player as Record<string, unknown>).id) === String(EALA_ID)
+        );
+      });
+
+      const ranking = numberValue(row?.ranking);
+      if (ranking !== null) return ranking;
+
+      if (rows.length < pageSize) return null;
+    } catch {
+      return null;
+    }
   }
+
+  return null;
 }
 
 function rankRecord(matches: WtaMatch[]) {
@@ -428,25 +438,32 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
   return null;
 }
 export async function getEalaDashboard(): Promise<DashboardData> {
-  const [singles, doubles, singlesRank, doublesRank, nextMatch] =
+  const [singlesResult, doublesResult, singlesRank, doublesRank, nextMatch] =
     await Promise.all([
-      getPlayerMatches("S").catch(() => []),
-      getPlayerMatches("D").catch(() => []),
+      getPlayerMatches("S").then((matches) => ({ matches, ok: true })).catch(() => ({ matches: [], ok: false })),
+      getPlayerMatches("D").then((matches) => ({ matches, ok: true })).catch(() => ({ matches: [], ok: false })),
       findRank("rankSingles", "singles"),
       findRank("rankDoubles", "doubles"),
       findNextMatch(),
     ]);
 
+  const singles = singlesResult.matches;
+  const doubles = doublesResult.matches;
+
   const latestMatch =
     [...singles]
       .filter(isCompleted)
       .sort((a, b) => matchSortKey(b) - matchSortKey(a))[0] ?? null;
+
   const singlesRecord = rankRecord(singles);
   const doublesRecord = rankRecord(doubles);
 
   return {
     latestMatch,
-    nextMatch,
+    nextMatch:
+      singlesResult.ok || doublesResult.ok
+        ? nextMatch
+        : null,
     singlesRank,
     doublesRank,
     singlesRecord,
