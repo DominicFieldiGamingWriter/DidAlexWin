@@ -266,8 +266,14 @@ export default async function Home() {
 
           <div className="upcoming-meta">
             <div>
-              <span>DATE</span>
-              <strong>{data.nextMatch?.date ?? "—"}</strong>
+              <span>{data.nextMatch?.opponent === "TBA" ? "STARTS" : "DATE"}</span>
+              <strong>
+                {data.nextMatch
+                  ? data.nextMatch.opponent === "TBA"
+                    ? formatDate(data.nextMatch.tournamentStart)
+                    : data.nextMatch.date
+                  : "—"}
+              </strong>
             </div>
             <div>
               <span>TOURNAMENT</span>
