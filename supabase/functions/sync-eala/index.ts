@@ -2,7 +2,7 @@ import postgres from "npm:postgres@3.4.7";
 
 const EALA_ID = 330332;
 const WTA = "https://api.wtatennis.com/tennis";
-const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { max: 1, prepare: false, ssl: "require" });
+const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { max: 1, prepare: false, ssl: "require", types: { json: { to: 114, from: [114, 3802], serialize: (value: unknown) => value, parse: (value: string) => JSON.parse(value) } } });
 const q = (text: string, params: unknown[] = []) => db.unsafe(text, params);
 
 type Row = Record<string, unknown>;
