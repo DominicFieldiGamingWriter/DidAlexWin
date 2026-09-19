@@ -160,7 +160,7 @@ function roundLabel(round: string): string {
     S: "Semifinal",
     F: "Final",
   };
-  return map[round] ?? round || "—";
+  return map[round] ?? (round || "—");
 }
 
 function bestRound(current: string, candidate: string): string {
