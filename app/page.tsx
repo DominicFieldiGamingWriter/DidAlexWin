@@ -1,6 +1,75 @@
 import Image from "next/image";
+import { getEalaDashboard } from "@/lib/wta";
 
-export default function Home() {
+function formatDate(value: unknown) {
+  if (typeof value !== "string" || !value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function latestOpponent(match: Record<string, unknown> | null) {
+  if (!match) return "Opponent";
+  const opponent = match.opponent;
+  if (opponent && typeof opponent === "object") {
+    const name = (opponent as Record<string, unknown>).fullName;
+    if (typeof name === "string" && name) return name;
+  }
+  const ealaIs1 = String(match.player_1) === "330332";
+  return String(
+    ealaIs1 ? match.team_name_2 ?? "Opponent" : match.team_name_1 ?? "Opponent"
+  );
+}
+
+function resultText(match: Record<string, unknown> | null) {
+  if (!match) return "—";
+  const winner = match.winner;
+  const ealaIs1 = String(match.player_1) === "330332";
+  const won =
+    Number(winner) === (ealaIs1 ? 1 : 2);
+  return won ? "YES" : "NO";
+}
+
+function roundText(round: unknown) {
+  const map: Record<string, string> = {
+    R128: "Round of 128",
+    R64: "Round of 64",
+    R32: "Round of 32",
+    R16: "Round of 16",
+    Q: "Quarterfinal",
+    S: "Semifinal",
+    F: "Final",
+  };
+  return map[String(round ?? "")] ?? String(round || "—");
+}
+
+export default async function Home() {
+  let data;
+  try {
+    data = await getEalaDashboard();
+  } catch {
+    data = {
+      latestMatch: null,
+      nextMatch: null,
+      singlesRank: 18,
+      doublesRank: 88,
+      singlesRecord: { wins: 40, losses: 21 },
+      doublesRecord: { wins: 0, losses: 0 },
+      singlesTitles: 1,
+      doublesTitles: 0,
+      grandSlams: {},
+      profile: {},
+    };
+  }
+
+  const latest = data.latestMatch;
+  const answer = resultText(latest);
+  const won = answer === "YES";
+
   return (
     <main className="page">
       <div className="top-row">
@@ -11,7 +80,7 @@ export default function Home() {
         <div className="top-image-wrap" aria-hidden="true">
           <Image
             className="top-image"
-            src="/happy-alex.png"
+            src={won ? "/happy-alex.png" : "/sad-alex.png"}
             alt=""
             width={128}
             height={128}
@@ -19,7 +88,7 @@ export default function Home() {
           />
         </div>
 
-        <div className="answer pending">—</div>
+        <div className={`answer ${won ? "yes" : "no"}`}>{answer}</div>
       </div>
 
       <section className="result-section">
@@ -27,11 +96,17 @@ export default function Home() {
           <div className="match-main">
             <div className="match-context">
               <div className="section-label">TOURNAMENT</div>
-              <div className="match-title">Waiting for Eala match data</div>
-              <div className="match-date">Singles or doubles · Automatically updated</div>
+              <div className="match-title">
+                {latest?.TournamentName ? String(latest.TournamentName) : "Waiting for Eala match data"}
+              </div>
+              <div className="match-date">
+                {latest ? formatDate(String(latest.StartDate)) : "Automatically updated"}
+              </div>
             </div>
 
-            <div className="result-score">—</div>
+            <div className="result-score">
+              {latest?.scores ? String(latest.scores).replace(/  +/g, " ") : "—"}
+            </div>
           </div>
 
           <div className="players-row">
@@ -42,18 +117,18 @@ export default function Home() {
             <div className="vs">VS</div>
 
             <div className="player-side player-side-right">
-              <div className="player-name">Opponent</div>
+              <div className="player-name">{latestOpponent(latest)}</div>
             </div>
           </div>
 
           <div className="match-details">
             <div>
               <span>ROUND</span>
-              <strong>—</strong>
+              <strong>{latest ? roundText(latest.round_name) : "—"}</strong>
             </div>
             <div>
               <span>SURFACE</span>
-              <strong>—</strong>
+              <strong>{latest?.Surface ? String(latest.Surface) : "—"}</strong>
             </div>
             <div>
               <span>DURATION</span>
@@ -61,7 +136,7 @@ export default function Home() {
             </div>
             <div>
               <span>VENUE</span>
-              <strong>—</strong>
+              <strong>{latest?.city ? String(latest.city) : "—"}</strong>
             </div>
           </div>
         </div>
@@ -75,24 +150,28 @@ export default function Home() {
         <div className="upcoming-card">
           <div>
             <div className="section-label">NEXT MATCH</div>
-            <div className="upcoming-title">Waiting for scheduled fixture</div>
+            <div className="upcoming-title">
+              {data.nextMatch?.opponent ?? "Waiting for scheduled fixture"}
+            </div>
             <div className="upcoming-date">
-              The next Alexandra Eala match will appear here automatically.
+              {data.nextMatch
+                ? `${data.nextMatch.tournament} · ${data.nextMatch.round}`
+                : "The next Alexandra Eala match will appear here automatically."}
             </div>
           </div>
 
           <div className="upcoming-meta">
             <div>
               <span>DATE</span>
-              <strong>—</strong>
+              <strong>{data.nextMatch?.date ?? "—"}</strong>
             </div>
             <div>
               <span>TOURNAMENT</span>
-              <strong>—</strong>
+              <strong>{data.nextMatch?.tournament ?? "—"}</strong>
             </div>
             <div>
               <span>OPPONENT</span>
-              <strong>—</strong>
+              <strong>{data.nextMatch?.opponent ?? "—"}</strong>
             </div>
           </div>
         </div>
@@ -113,49 +192,22 @@ export default function Home() {
           </div>
           <div className="bio-copy">
             <p>
-              Alexandra Eala is a professional tennis player from the Philippines.
-              Verified profile information will be connected here from the tennis
-              data source.
+              Alexandra Eala is a professional tennis player from the
+              Philippines, born in Quezon City on 23 May 2005.
             </p>
             <p>
-              Eala first attracted international attention as a junior and has
-              since progressed onto the professional tour, competing across
-              singles and doubles events.
+              She is left-handed and stands 1.75m tall. Eala made her WTA Tour
+              debut in Miami qualifying in 2021 and trains at the Rafael Nadal
+              Academy in Mallorca.
             </p>
             <p>
-              This biography area will provide a concise overview of her career,
-              including major milestones, tournament appearances and ranking
-              progress.
+              Her 2025 breakthrough included a semifinal run at the Miami Open,
+              her first WTA final at Eastbourne and her first WTA 125 title at
+              Guadalajara.
             </p>
             <p>
-              Her match history will be updated independently from the biography,
-              so this section can remain focused on who Alex is rather than what
-              happened in her latest match.
-            </p>
-            <p>
-              The final version will use verified profile details and carefully
-              sourced career information rather than static placeholder copy.
-            </p>
-            <p>
-              It will also give visitors useful context before they move into the
-              live result, upcoming fixture and statistical sections below.
-            </p>
-            <p>
-              Singles and doubles achievements will both be represented so the
-              page reflects the full range of Eala&apos;s tennis career.
-            </p>
-            <p>
-              Grand Slam appearances and results will be presented separately
-              where the underlying data supports them.
-            </p>
-            <p>
-              Ranking information will be refreshed from the same data layer used
-              elsewhere on the site.
-            </p>
-            <p>
-              This is placeholder copy for layout testing only and will be
-              replaced with the finished biography once the data and editorial
-              content are ready.
+              In 2026 she won the Washington DC WTA 500, reached the fourth
+              round at Wimbledon and reached the third round of the US Open.
             </p>
           </div>
         </div>
@@ -168,20 +220,20 @@ export default function Home() {
           <div className="stats-column">
             <h3>SINGLES</h3>
             <div className="stats-list">
-              <div><span>Career record</span><strong>40–21</strong></div>
-              <div><span>Career titles</span><strong>1</strong></div>
+              <div><span>Career record</span><strong>{data.singlesRecord.wins}–{data.singlesRecord.losses}</strong></div>
+              <div><span>Career titles</span><strong>{data.singlesTitles}</strong></div>
               <div><span>Highest ranking</span><strong>No. 18</strong></div>
-              <div><span>Current ranking</span><strong>No. 18</strong></div>
+              <div><span>Current ranking</span><strong>{data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
             </div>
           </div>
 
           <div className="stats-column">
             <h3 className="doubles-heading">DOUBLES</h3>
             <div className="stats-list">
-              <div><span>Career record</span><strong>—</strong></div>
-              <div><span>Career titles</span><strong>—</strong></div>
-              <div><span>Highest ranking</span><strong>—</strong></div>
-              <div><span>Current ranking</span><strong>—</strong></div>
+              <div><span>Career record</span><strong>{data.doublesRecord.wins}–{data.doublesRecord.losses}</strong></div>
+              <div><span>Career titles</span><strong>{data.doublesTitles}</strong></div>
+              <div><span>Highest ranking</span><strong>No. 88</strong></div>
+              <div><span>Current ranking</span><strong>{data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
             </div>
           </div>
         </div>
@@ -191,25 +243,24 @@ export default function Home() {
         <h2 className="section-title">GRAND SLAM RECORD</h2>
 
         <div className="grand-slam-grid">
-          <div>
-            <h3>SINGLES</h3>
-            <div className="slam-list">
-              <div><span>Australian Open</span><strong>—</strong></div>
-              <div><span>French Open</span><strong>—</strong></div>
-              <div><span>Wimbledon</span><strong>—</strong></div>
-              <div><span>US Open</span><strong>—</strong></div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="doubles-heading">DOUBLES</h3>
-            <div className="slam-list">
-              <div><span>Australian Open</span><strong>—</strong></div>
-              <div><span>French Open</span><strong>—</strong></div>
-              <div><span>Wimbledon</span><strong>—</strong></div>
-              <div><span>US Open</span><strong>—</strong></div>
-            </div>
-          </div>
+          {["Australian Open", "French Open", "Wimbledon", "US Open"].map((slam) => {
+            const record = data.grandSlams[slam];
+            return (
+              <div key={slam}>
+                <h3>{slam}</h3>
+                <div className="slam-list">
+                  <div>
+                    <span>Record</span>
+                    <strong>{record ? `${record.wins}–${record.losses}` : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Best result</span>
+                    <strong>{record?.best ? roundText(record.best) : "—"}</strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
