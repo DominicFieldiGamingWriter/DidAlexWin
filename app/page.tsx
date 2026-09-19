@@ -1,7 +1,7 @@
 import Image from "next/image";
+import { getEalaDashboard } from "../lib/wta";
 
 export const dynamic = "force-dynamic";
-import { getEalaDashboard } from "../lib/wta";
 
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";
@@ -25,6 +25,47 @@ function latestOpponent(match: Record<string, unknown> | null) {
   return String(
     ealaIs1 ? match.team_name_2 ?? "Opponent" : match.team_name_1 ?? "Opponent"
   );
+}
+
+function titleCase(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "—";
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .replace(/\bUs\b/g, "US")
+    .replace(/\bDc\b/g, "DC");
+}
+
+function formatTournament(value: unknown) {
+  const text = titleCase(value);
+  if (text === "Us Open") return "US Open";
+  return text;
+}
+
+function parseScores(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return [];
+  return value.trim().split(/\s+/).map((set) => {
+    const parts = set.split("-");
+    return {
+      first: parts[0] ?? "",
+      second: (parts[1] ?? "").replace(/\(.*/, ""),
+    };
+  });
+}
+
+function scoreRows(match: Record<string, unknown> | null) {
+  if (!match) return { eala: [], opponent: [] };
+
+  const sets = parseScores(match.scores);
+  const teamOne = String(match.team_name_1 ?? "").toUpperCase();
+  const ealaScoresFirst = teamOne.includes("EALA");
+
+  return {
+    eala: sets.map((set) => ealaScoresFirst ? set.first : set.second),
+    opponent: sets.map((set) => ealaScoresFirst ? set.second : set.first),
+  };
 }
 
 function resultText(match: Record<string, unknown> | null) {
@@ -71,12 +112,13 @@ export default async function Home() {
   const latest = data.latestMatch;
   const answer = resultText(latest);
   const won = answer === "YES";
+  const scores = scoreRows(latest);
 
   return (
     <main className="page">
       <div className="top-row">
         <h1 className="main-heading">
-          DID <span className="alex-name"><span className="alex-a">A</span><span className="alex-l">L</span><span className="alex-e">E</span><span className="alex-x">X</span></span> WIN?
+          DID <span className="alex-name">ALEX</span> WIN?
         </h1>
 
         <div className="top-image-wrap" aria-hidden="true">
@@ -99,15 +141,11 @@ export default async function Home() {
             <div className="match-context">
               <div className="section-label">TOURNAMENT</div>
               <div className="match-title">
-                {latest?.TournamentName ? String(latest.TournamentName) : "Waiting for Eala match data"}
+                {latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}
               </div>
               <div className="match-date">
                 {latest ? formatDate(String(latest.StartDate)) : "Automatically updated"}
               </div>
-            </div>
-
-            <div className="result-score">
-              {latest?.scores ? String(latest.scores).replace(/  +/g, " ") : "—"}
             </div>
           </div>
 
@@ -123,6 +161,35 @@ export default async function Home() {
             </div>
           </div>
 
+          <div className="scoreboard">
+            <div className="scoreboard-head">
+              <span>FINAL SCORE</span>
+              <span>SET 1</span>
+              <span>SET 2</span>
+              <span>SET 3</span>
+            </div>
+
+            <div className={`score-row ${won ? "score-row-winner" : ""}`}>
+              <div className="score-player">
+                <strong>Alexandra Eala</strong>
+                {won && <span className="winner-tag">WINNER</span>}
+              </div>
+              {[0, 1, 2].map((index) => (
+                <strong className="set-score" key={index}>{scores.eala[index] ?? "—"}</strong>
+              ))}
+            </div>
+
+            <div className={`score-row ${won ? "" : "score-row-winner"}`}>
+              <div className="score-player">
+                <strong>{latestOpponent(latest)}</strong>
+                {!won && latest && <span className="winner-tag">WINNER</span>}
+              </div>
+              {[0, 1, 2].map((index) => (
+                <strong className="set-score" key={index}>{scores.opponent[index] ?? "—"}</strong>
+              ))}
+            </div>
+          </div>
+
           <div className="match-details">
             <div>
               <span>ROUND</span>
@@ -130,15 +197,11 @@ export default async function Home() {
             </div>
             <div>
               <span>SURFACE</span>
-              <strong>{latest?.Surface ? String(latest.Surface) : "—"}</strong>
-            </div>
-            <div>
-              <span>DURATION</span>
-              <strong>—</strong>
+              <strong>{latest?.Surface ? titleCase(latest.Surface) : "—"}</strong>
             </div>
             <div>
               <span>VENUE</span>
-              <strong>{latest?.city ? String(latest.city) : "—"}</strong>
+              <strong>{latest?.city ? titleCase(latest.city) : "—"}</strong>
             </div>
           </div>
         </div>
@@ -169,7 +232,7 @@ export default async function Home() {
             </div>
             <div>
               <span>TOURNAMENT</span>
-              <strong>{data.nextMatch?.tournament ?? "—"}</strong>
+              <strong>{data.nextMatch?.tournament ? formatTournament(data.nextMatch.tournament) : "—"}</strong>
             </div>
             <div>
               <span>OPPONENT</span>
