@@ -1,6 +1,7 @@
 const BASE = "https://api.wtatennis.com/tennis";
 
 export const EALA_ID = 330332;
+const FIVE_MINUTES = 300;
 
 export type WtaMatch = Record<string, unknown>;
 
@@ -13,6 +14,8 @@ export type DashboardData = {
     date: string;
     surface: string;
     venue: string;
+    tournamentStart: string;
+    tournamentEnd: string;
   } | null;
   singlesRank: number | null;
   doublesRank: number | null;
@@ -21,12 +24,11 @@ export type DashboardData = {
   singlesTitles: number;
   doublesTitles: number;
   grandSlams: Record<string, { wins: number; losses: number; best: string }>;
-  profile: Record<string, unknown>;
 };
 
-async function getJson(url: string): Promise<unknown> {
+async function getJson(url: string, revalidate = FIVE_MINUTES): Promise<unknown> {
   const response = await fetch(url, {
-    next: { revalidate: 900 },
+    next: { revalidate },
     headers: { Accept: "application/json" },
   });
 
@@ -37,7 +39,7 @@ async function getJson(url: string): Promise<unknown> {
   return response.json();
 }
 
-function records(payload: unknown, key: string): Record<string, unknown>[] {
+function records(payload: unknown, key = ""): Record<string, unknown>[] {
   if (Array.isArray(payload)) {
     return payload.filter(
       (item): item is Record<string, unknown> =>
@@ -47,99 +49,76 @@ function records(payload: unknown, key: string): Record<string, unknown>[] {
 
   if (typeof payload !== "object" || payload === null) return [];
 
-  const value = (payload as Record<string, unknown>)[key];
-  if (Array.isArray(value)) {
-    return value.filter(
-      (item): item is Record<string, unknown> =>
-        typeof item === "object" && item !== null
-    );
-  }
+  const object = payload as Record<string, unknown>;
+  const value = key ? object[key] : object.content ?? object.matches;
 
-  const content = (payload as Record<string, unknown>).content;
-  if (Array.isArray(content)) {
-    return content.filter(
-      (item): item is Record<string, unknown> =>
-        typeof item === "object" && item !== null
-    );
-  }
+  if (!Array.isArray(value)) return [];
 
-  return [];
-}
-
-function numberValue(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return value.filter(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null
+  );
 }
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function playerIdsMatch(value: unknown, targetId: number): boolean {
+function numberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function playerIdsMatch(value: unknown): boolean {
   if (typeof value === "string" || typeof value === "number") {
-    return String(value) === String(targetId);
+    return String(value) === String(EALA_ID);
   }
 
   if (Array.isArray(value)) {
-    return value.some((item) => playerIdsMatch(item, targetId));
+    return value.some(playerIdsMatch);
   }
 
   if (typeof value === "object" && value !== null) {
-    return Object.values(value as Record<string, unknown>).some((item) =>
-      playerIdsMatch(item, targetId)
-    );
+    return Object.values(value as Record<string, unknown>).some(playerIdsMatch);
   }
 
   return false;
 }
 
-function matchDate(match: WtaMatch): number {
-  const candidates = [
-    match.StartDate,
-    match.startDate,
-    match.matchDate,
-    match.date,
-    match.scheduledTime,
-  ];
-
-  for (const candidate of candidates) {
-    const text = stringValue(candidate);
-    const time = Date.parse(text);
-    if (!Number.isNaN(time)) return time;
-  }
-
-  return 0;
-}
-
-function hasPlayedOpponent(match: WtaMatch): boolean {
-  const opponent = match.opponent;
-  if (opponent && typeof opponent === "object") return true;
-
-  const scores = stringValue(match.scores);
-  return scores.trim().length > 0 && stringValue(match.player_2) !== "BYE";
+function roundRank(round: string): number {
+  const order: Record<string, number> = {
+    R128: 1,
+    R64: 2,
+    R32: 3,
+    R16: 4,
+    Q: 5,
+    S: 6,
+    F: 7,
+  };
+  return order[round] ?? 0;
 }
 
 function ealaWon(match: WtaMatch): boolean | null {
   const winner = numberValue(match.winner);
-  const p1 = stringValue(match.player_1);
-  const p2 = stringValue(match.player_2);
-
   if (winner === null) return null;
-  if (winner === 1) return p1 === String(EALA_ID);
-  if (winner === 2) return p2 === String(EALA_ID);
+
+  if (winner === 1) return stringValue(match.player_1) === String(EALA_ID);
+  if (winner === 2) return stringValue(match.player_2) === String(EALA_ID);
+
   return null;
 }
 
 function opponentName(match: WtaMatch): string {
   const opponent = match.opponent;
+
   if (opponent && typeof opponent === "object") {
-    const fullName = stringValue(
+    const name = stringValue(
       (opponent as Record<string, unknown>).fullName
     );
-    if (fullName) return fullName;
+    if (name) return name;
   }
 
-  const ealaIs1 = stringValue(match.player_1) === String(EALA_ID);
-  const team = ealaIs1
+  const ealaIsPlayerOne = stringValue(match.player_1) === String(EALA_ID);
+  const team = ealaIsPlayerOne
     ? stringValue(match.team_name_2)
     : stringValue(match.team_name_1);
 
@@ -150,26 +129,82 @@ function opponentName(match: WtaMatch): string {
   return "Opponent";
 }
 
-function roundLabel(round: string): string {
-  const map: Record<string, string> = {
-    R128: "Round of 128",
-    R64: "Round of 64",
-    R32: "Round of 32",
-    R16: "Round of 16",
-    Q: "Quarterfinal",
-    S: "Semifinal",
-    F: "Final",
+function tournamentDates(match: WtaMatch): { start: string; end: string } {
+  const tournament =
+    typeof match.tournament === "object" && match.tournament !== null
+      ? (match.tournament as Record<string, unknown>)
+      : {};
+
+  return {
+    start: stringValue(tournament.startDate) || stringValue(match.StartDate),
+    end: stringValue(tournament.endDate),
   };
-  return map[round] ?? (round || "—");
 }
 
-function bestRound(current: string, candidate: string): string {
-  const order = ["R128", "R64", "R32", "R16", "Q", "S", "F"];
-  const currentIndex = order.indexOf(current);
-  const candidateIndex = order.indexOf(candidate);
-  if (currentIndex === -1) return candidate;
-  if (candidateIndex === -1) return current;
-  return candidateIndex > currentIndex ? candidate : current;
+function matchSortKey(match: WtaMatch): number {
+  const dates = tournamentDates(match);
+  const end = Date.parse(dates.end);
+  const start = Date.parse(dates.start);
+  const datePart = Number.isNaN(end) ? (Number.isNaN(start) ? 0 : start) : end;
+
+  return datePart * 10 + roundRank(stringValue(match.round_name));
+}
+
+function isCompleted(match: WtaMatch): boolean {
+  return (
+    stringValue(match.scores).trim().length > 0 &&
+    numberValue(match.winner) !== null &&
+    stringValue(match.player_2) !== "BYE" &&
+    !!match.opponent
+  );
+}
+
+async function getPlayerMatches(type: "S" | "D"): Promise<WtaMatch[]> {
+  const payload = await getJson(
+    `${BASE}/players/${EALA_ID}/matches?page=0&pageSize=500&id=${EALA_ID}&year=&type=${type}&sort=desc&tournamentGroupId=`
+  );
+
+  return records(payload, "matches");
+}
+
+async function findRank(
+  type: "rankSingles" | "rankDoubles",
+  metric: "singles" | "doubles"
+): Promise<number | null> {
+  try {
+    const payload = await getJson(
+      `${BASE}/players/ranked?type=${type}&metric=${metric}&page=0&pageSize=200`
+    );
+
+    const row = records(payload).find((item) => {
+      const player = item.player;
+      return (
+        typeof player === "object" &&
+        player !== null &&
+        String((player as Record<string, unknown>).id) === String(EALA_ID)
+      );
+    });
+
+    return numberValue(row?.ranking);
+  } catch {
+    return null;
+  }
+}
+
+function rankRecord(matches: WtaMatch[]) {
+  return {
+    wins: matches.filter((match) => ealaWon(match) === true && isCompleted(match)).length,
+    losses: matches.filter((match) => ealaWon(match) === false && isCompleted(match)).length,
+  };
+}
+
+function titleCount(matches: WtaMatch[]) {
+  return matches.filter(
+    (match) =>
+      stringValue(match.round_name) === "F" &&
+      ealaWon(match) === true &&
+      stringValue(match.TournamentLevel) !== "C"
+  ).length;
 }
 
 function grandSlamKey(name: string): string | null {
@@ -183,49 +218,83 @@ function grandSlamKey(name: string): string | null {
   return null;
 }
 
-function isCompletedMatch(match: WtaMatch): boolean {
-  const scores = stringValue(match.scores).trim();
-  const winner = numberValue(match.winner);
-  return hasPlayedOpponent(match) && scores.length > 0 && winner !== null;
+function bestRound(current: string, candidate: string): string {
+  return roundRank(candidate) > roundRank(current) ? candidate : current;
 }
 
-async function getPlayerMatches(type: "S" | "D", year = ""): Promise<WtaMatch[]> {
-  const url =
-    `${BASE}/players/${EALA_ID}/matches?page=0&pageSize=100&id=${EALA_ID}&year=${year}&type=${type}&sort=desc&tournamentGroupId=`;
-  const payload = await getJson(url);
-  return records(payload, "matches");
+function buildGrandSlams(matches: WtaMatch[]) {
+  const result: DashboardData["grandSlams"] = {};
+
+  for (const match of matches) {
+    if (!isCompleted(match)) continue;
+
+    const key = grandSlamKey(stringValue(match.TournamentName));
+    if (!key) continue;
+
+    if (!result[key]) {
+      result[key] = { wins: 0, losses: 0, best: "" };
+    }
+
+    if (ealaWon(match) === true) result[key].wins += 1;
+    if (ealaWon(match) === false) result[key].losses += 1;
+
+    result[key].best = bestRound(
+      result[key].best,
+      stringValue(match.round_name)
+    );
+  }
+
+  return result;
 }
 
-async function findRank(type: "rankSingles" | "rankDoubles", metric: "singles" | "doubles") {
-  const payload = await getJson(
-    `${BASE}/players/ranked?type=${type}&metric=${metric}&page=0&pageSize=100`
-  );
-  const rows = records(payload, "");
-  const row = rows.find((item) => {
-    const player = item.player;
-    if (typeof player !== "object" || player === null) return false;
-    return String((player as Record<string, unknown>).id) === String(EALA_ID);
+function exactMatchDate(match: WtaMatch): string {
+  const candidates = [
+    match.matchDate,
+    match.match_date,
+    match.scheduledTime,
+    match.scheduled_time,
+    match.date,
+  ];
+
+  for (const candidate of candidates) {
+    const text = stringValue(candidate);
+    if (text && !Number.isNaN(Date.parse(text))) return text;
+  }
+
+  return "";
+}
+
+function formatDate(value: string): string {
+  if (!value) return "TBA";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBA";
+
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
-  return numberValue(row?.ranking);
 }
 
 async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
   try {
-    const calendarPayload = await getJson(
+    const tournamentPayload = await getJson(
       `${BASE}/tournaments?page=0&pageSize=100`
     );
 
-    const tournaments = records(calendarPayload, "tournaments")
+    const upcomingTournaments = records(tournamentPayload, "tournaments")
       .map((item) => {
         const group =
-          typeof item.tournamentGroup === "object" && item.tournamentGroup !== null
+          typeof item.tournamentGroup === "object" &&
+          item.tournamentGroup !== null
             ? (item.tournamentGroup as Record<string, unknown>)
-            : null;
+            : {};
 
         return {
-          groupId: numberValue(group?.id),
+          groupId: numberValue(group.id),
           year: numberValue(item.year),
-          startDate: stringValue(item.startDate),
+          start: stringValue(item.startDate),
+          end: stringValue(item.endDate),
           title: stringValue(item.title),
           surface: stringValue(item.surface),
         };
@@ -234,64 +303,83 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
         (item) =>
           item.groupId !== null &&
           item.year !== null &&
-          item.startDate &&
-          Date.parse(item.startDate) >= Date.now() - 36 * 60 * 60 * 1000
+          item.start &&
+          Date.parse(item.start) >= Date.now() - 36 * 60 * 60 * 1000
       )
-      .sort((a, b) => Date.parse(a.startDate) - Date.parse(b.startDate))
-      .slice(0, 8);
+      .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+      .slice(0, 6);
 
-    for (const tournament of tournaments) {
-      const playersPayload = await getJson(
-        `${BASE}/tournaments/${tournament.groupId}/${tournament.year}/players`
-      );
+    const draws = await Promise.all(
+      upcomingTournaments.map(async (tournament) => {
+        try {
+          const payload = await getJson(
+            `${BASE}/tournaments/${tournament.groupId}/${tournament.year}/matches`
+          );
 
-      if (!playerIdsMatch(playersPayload, EALA_ID)) continue;
+          return {
+            tournament,
+            matches: records(payload, "matches"),
+          };
+        } catch {
+          return { tournament, matches: [] };
+        }
+      })
+    );
 
-      const matchesPayload = await getJson(
-        `${BASE}/tournaments/${tournament.groupId}/${tournament.year}/matches`
-      );
-      const matches = records(matchesPayload, "matches");
+    for (const draw of draws) {
+      const ealaMatches = draw.matches.filter(playerIdsMatch);
+      if (ealaMatches.length === 0) continue;
 
-      const upcoming = matches
+      const upcoming = ealaMatches
         .filter((match) => {
-          if (!playerIdsMatch(match, EALA_ID)) return false;
-          const time = matchDate(match);
           const scores = stringValue(match.scores).trim();
           const winner = numberValue(match.winner);
+          const opponent = match.opponent;
           return (
-            (time === 0 || time >= Date.now() - 36 * 60 * 60 * 1000) &&
-            scores.length === 0 &&
-            winner === null &&
-            stringValue(match.player_2) !== "BYE"
+            (!scores || winner === null) &&
+            !!opponent &&
+            String(match.player_2) !== "BYE"
           );
         })
-        .sort((a, b) => matchDate(a) - matchDate(b));
+        .sort((a, b) => {
+          const da = exactMatchDate(a);
+          const db = exactMatchDate(b);
+          if (da && db) return Date.parse(da) - Date.parse(db);
+          return roundRank(stringValue(a.round_name)) -
+            roundRank(stringValue(b.round_name));
+        });
 
       const match = upcoming[0];
-      if (!match) continue;
+      const tournament = draw.tournament;
 
-      const start = matchDate(match) || Date.parse(tournament.startDate);
+      if (match) {
+        const exactDate = exactMatchDate(match);
+        const dates = tournamentDates(match);
+
+        return {
+          tournament:
+            stringValue(match.TournamentName) ||
+            tournament.title ||
+            "Upcoming tournament",
+          round: stringValue(match.round_name) || "TBA",
+          opponent: opponentName(match),
+          date: exactDate ? formatDate(exactDate) : "TBA",
+          surface: stringValue(match.Surface) || tournament.surface || "—",
+          venue: stringValue(match.city) || "—",
+          tournamentStart: dates.start || tournament.start,
+          tournamentEnd: dates.end || tournament.end,
+        };
+      }
 
       return {
-        tournament:
-          stringValue(match.TournamentName) ||
-          tournament.title ||
-          "Upcoming tournament",
-        round: roundLabel(stringValue(match.round_name)),
-        opponent: opponentName(match),
-        date: start
-          ? new Date(start).toLocaleDateString("en-GB", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })
-          : "TBA",
-        surface:
-          stringValue(match.Surface) || tournament.surface || "—",
-        venue:
-          stringValue(match.city) ||
-          stringValue(match.Country) ||
-          "—",
+        tournament: tournament.title || "Upcoming tournament",
+        round: "TBA",
+        opponent: "TBA",
+        date: "TBA",
+        surface: tournament.surface || "—",
+        venue: "—",
+        tournamentStart: tournament.start,
+        tournamentEnd: tournament.end,
       };
     }
   } catch {
@@ -302,70 +390,32 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
 }
 
 export async function getEalaDashboard(): Promise<DashboardData> {
-  const [
-    latestSingles,
-    latestDoubles,
-    singlesRank,
-    doublesRank,
-    nextMatch,
-    profile,
-  ] = await Promise.all([
-    getPlayerMatches("S"),
-    getPlayerMatches("D"),
-    findRank("rankSingles", "singles"),
-    findRank("rankDoubles", "doubles"),
-    findNextMatch(),
-    getJson(`${BASE}/players/${EALA_ID}`).catch(() => ({})),
-  ]);
+  const [singles, doubles, singlesRank, doublesRank, nextMatch] =
+    await Promise.all([
+      getPlayerMatches("S").catch(() => []),
+      getPlayerMatches("D").catch(() => []),
+      findRank("rankSingles", "singles"),
+      findRank("rankDoubles", "doubles"),
+      findNextMatch(),
+    ]);
 
-  const completed = [...latestSingles, ...latestDoubles]
-    .filter(isCompletedMatch)
-    .sort((a, b) => matchDate(b) - matchDate(a));
+  const completed = [...singles, ...doubles]
+    .filter(isCompleted)
+    .sort((a, b) => matchSortKey(b) - matchSortKey(a));
 
   const latestMatch = completed[0] ?? null;
-
-  const singlesWins = latestSingles.filter((m) => ealaWon(m) === true).length;
-  const singlesLosses = latestSingles.filter((m) => ealaWon(m) === false).length;
-  const doublesWins = latestDoubles.filter((m) => ealaWon(m) === true).length;
-  const doublesLosses = latestDoubles.filter((m) => ealaWon(m) === false).length;
-
-  const grandSlams: DashboardData["grandSlams"] = {};
-  for (const match of latestSingles) {
-    const key = grandSlamKey(stringValue(match.TournamentName));
-    if (!key || !isCompletedMatch(match)) continue;
-
-    if (!grandSlams[key]) {
-      grandSlams[key] = { wins: 0, losses: 0, best: "" };
-    }
-
-    if (ealaWon(match) === true) grandSlams[key].wins += 1;
-    if (ealaWon(match) === false) grandSlams[key].losses += 1;
-
-    grandSlams[key].best = bestRound(
-      grandSlams[key].best,
-      stringValue(match.round_name)
-    );
-  }
+  const singlesRecord = rankRecord(singles);
+  const doublesRecord = rankRecord(doubles);
 
   return {
     latestMatch,
     nextMatch,
     singlesRank,
     doublesRank,
-    singlesRecord: {
-      wins: singlesWins || 40,
-      losses: singlesLosses || 21,
-    },
-    doublesRecord: {
-      wins: doublesWins,
-      losses: doublesLosses,
-    },
-    singlesTitles: 1,
-    doublesTitles: 0,
-    grandSlams,
-    profile:
-      typeof profile === "object" && profile !== null
-        ? (profile as Record<string, unknown>)
-        : {},
+    singlesRecord,
+    doublesRecord,
+    singlesTitles: titleCount(singles),
+    doublesTitles: titleCount(doubles),
+    grandSlams: buildGrandSlams(singles),
   };
 }

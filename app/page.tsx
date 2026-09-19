@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { getEalaDashboard } from "../lib/wta";
+import RefreshOnInterval from "./refresh";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";
@@ -12,6 +13,28 @@ function formatDate(value: unknown) {
     month: "short",
     year: "numeric",
   });
+}
+
+function formatDateRange(start: unknown, end: unknown) {
+  if (typeof start !== "string" || !start) return "";
+  const startDate = new Date(start);
+  if (Number.isNaN(startDate.getTime())) return "";
+
+  if (typeof end !== "string" || !end) {
+    return formatDate(start);
+  }
+
+  const endDate = new Date(end);
+  if (Number.isNaN(endDate.getTime())) return formatDate(start);
+
+  return `${startDate.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  })} – ${endDate.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`;
 }
 
 function latestOpponent(match: Record<string, unknown> | null) {
@@ -63,17 +86,16 @@ function scoreRows(match: Record<string, unknown> | null) {
   const ealaScoresFirst = teamOne.includes("EALA");
 
   return {
-    eala: sets.map((set) => ealaScoresFirst ? set.first : set.second),
-    opponent: sets.map((set) => ealaScoresFirst ? set.second : set.first),
+    eala: sets.map((set) => (ealaScoresFirst ? set.first : set.second)),
+    opponent: sets.map((set) => (ealaScoresFirst ? set.second : set.first)),
   };
 }
 
 function resultText(match: Record<string, unknown> | null) {
   if (!match) return "—";
-  const winner = match.winner;
+  const winner = Number(match.winner);
   const ealaIs1 = String(match.player_1) === "330332";
-  const won =
-    Number(winner) === (ealaIs1 ? 1 : 2);
+  const won = winner === (ealaIs1 ? 1 : 2);
   return won ? "YES" : "NO";
 }
 
@@ -91,31 +113,17 @@ function roundText(round: unknown) {
 }
 
 export default async function Home() {
-  let data;
-  try {
-    data = await getEalaDashboard();
-  } catch {
-    data = {
-      latestMatch: null,
-      nextMatch: null,
-      singlesRank: 18,
-      doublesRank: 88,
-      singlesRecord: { wins: 40, losses: 21 },
-      doublesRecord: { wins: 0, losses: 0 },
-      singlesTitles: 1,
-      doublesTitles: 0,
-      grandSlams: {},
-      profile: {},
-    };
-  }
-
+  const data = await getEalaDashboard();
   const latest = data.latestMatch;
   const answer = resultText(latest);
   const won = answer === "YES";
   const scores = scoreRows(latest);
+  const tournament = latest?.tournament as Record<string, unknown> | undefined;
 
   return (
     <main className="page">
+      <RefreshOnInterval />
+
       <div className="top-row">
         <h1 className="main-heading">
           DID <span className="alex-name">ALEX</span> WIN?
@@ -124,7 +132,7 @@ export default async function Home() {
         <div className="top-image-wrap" aria-hidden="true">
           <Image
             className="top-image"
-            src={won ? "/happy-alex.png" : "/sad-alex.png"}
+            src={answer === "YES" ? "/happy-alex.png" : answer === "NO" ? "/sad-alex.png" : "/happy-alex.png"}
             alt=""
             width={128}
             height={128}
@@ -132,7 +140,9 @@ export default async function Home() {
           />
         </div>
 
-        <div className={`answer ${won ? "yes" : "no"}`}>{answer}</div>
+        <div className={`answer ${answer === "YES" ? "yes" : answer === "NO" ? "no" : "pending"}`}>
+          {answer}
+        </div>
       </div>
 
       <section className="result-section">
@@ -143,20 +153,26 @@ export default async function Home() {
               <div className="match-title">
                 {latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}
               </div>
+              <div className="section-label match-date-label">TOURNAMENT DATES</div>
               <div className="match-date">
-                {latest ? formatDate(String(latest.StartDate)) : "Automatically updated"}
+                {latest
+                  ? formatDateRange(
+                      tournament?.startDate ?? latest.StartDate,
+                      tournament?.endDate
+                    )
+                  : "Automatically updated"}
               </div>
             </div>
           </div>
 
           <div className="players-row">
-            <div className="player-side player-side-left">
+            <div className={`player-side player-side-left ${won ? "player-winner" : ""}`}>
               <div className="player-name">Alexandra Eala</div>
             </div>
 
             <div className="vs">VS</div>
 
-            <div className="player-side player-side-right">
+            <div className={`player-side player-side-right ${!won && latest ? "player-winner" : ""}`}>
               <div className="player-name">{latestOpponent(latest)}</div>
             </div>
           </div>
@@ -172,7 +188,7 @@ export default async function Home() {
             <div className={`score-row ${won ? "score-row-winner" : ""}`}>
               <div className="score-player">
                 <strong>Alexandra Eala</strong>
-                {won && <span className="winner-tag">WINNER</span>}
+                {won && latest && <span className="winner-tag">WINNER</span>}
               </div>
               {[0, 1, 2].map((index) => (
                 <strong className="set-score" key={index}>{scores.eala[index] ?? "—"}</strong>
@@ -220,7 +236,7 @@ export default async function Home() {
             </div>
             <div className="upcoming-date">
               {data.nextMatch
-                ? `${data.nextMatch.tournament} · ${data.nextMatch.round}`
+                ? `${formatTournament(data.nextMatch.tournament)} · ${data.nextMatch.round}`
                 : "The next Alexandra Eala match will appear here automatically."}
             </div>
           </div>
@@ -308,7 +324,7 @@ export default async function Home() {
         <h2 className="section-title">GRAND SLAM RECORD</h2>
 
         <div className="grand-slam-grid">
-          {["Australian Open", "French Open", "Wimbledon", "US Open"].map((slam) => {
+          {[["Australian Open", "SINGLES"], ["French Open", "SINGLES"], ["Wimbledon", "SINGLES"], ["US Open", "SINGLES"]].map(([slam]) => {
             const record = data.grandSlams[slam];
             return (
               <div key={slam}>

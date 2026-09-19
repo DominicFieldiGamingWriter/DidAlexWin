@@ -166,10 +166,15 @@ body {
   letter-spacing: -1.7px;
 }
 
+.match-date-label {
+  margin-top: 15px;
+  font-size: 9px;
+}
+
 .match-date {
-  margin-top: 12px;
+  margin-top: 6px;
   color: #7084a1;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 
