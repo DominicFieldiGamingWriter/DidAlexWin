@@ -23,6 +23,8 @@ export type DashboardData = {
   doublesRecord: { wins: number; losses: number };
   singlesTitles: number;
   doublesTitles: number;
+  highestSinglesRank: number | null;
+  highestDoublesRank: number | null;
   grandSlams: Record<string, { wins: number; losses: number; best: string }>;
 };
 
@@ -470,6 +472,8 @@ export async function getEalaDashboard(): Promise<DashboardData> {
     doublesRecord,
     singlesTitles: titleCount(singles),
     doublesTitles: titleCount(doubles),
+    highestSinglesRank: 18,
+    highestDoublesRank: 88,
     grandSlams: buildGrandSlams(singles),
   };
 }

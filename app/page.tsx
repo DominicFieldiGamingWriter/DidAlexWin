@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { getEalaDashboard } from "../lib/wta";
+import { getEalaDashboardFromSupabase } from "../lib/supabase";
 import RefreshOnInterval from "./refresh";
 
 export const revalidate = 300;
@@ -113,9 +113,9 @@ function roundText(round: unknown) {
 }
 
 export default async function Home() {
-  const data = await getEalaDashboard();
+  const data = await getEalaDashboardFromSupabase();
   const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin-site.vercel.app";
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -323,7 +323,7 @@ export default async function Home() {
             <div className="stats-list">
               <div><span>2026 record</span><strong>{data.singlesRecord.wins}–{data.singlesRecord.losses}</strong></div>
               <div><span>Career titles</span><strong>{data.singlesTitles}</strong></div>
-              <div><span>Highest ranking</span><strong>No. 18</strong></div>
+              <div><span>Highest ranking</span><strong>No. {data.highestSinglesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
             </div>
           </div>
@@ -333,7 +333,7 @@ export default async function Home() {
             <div className="stats-list">
               <div><span>2026 record</span><strong>{data.doublesRecord.wins}–{data.doublesRecord.losses}</strong></div>
               <div><span>Career titles</span><strong>{data.doublesTitles}</strong></div>
-              <div><span>Highest ranking</span><strong>No. 88</strong></div>
+              <div><span>Highest ranking</span><strong>No. {data.highestDoublesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
             </div>
           </div>
