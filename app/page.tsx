@@ -177,7 +177,6 @@ export default async function Home() {
               <div className="match-title">
                 {latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}
               </div>
-              <div className="section-label match-date-label">TOURNAMENT DATES</div>
               <div className="match-date">
                 {latest
                   ? formatDateRange(
@@ -189,21 +188,9 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="players-row">
-            <div className={`player-side player-side-left ${won ? "player-winner" : ""}`}>
-              <div className="player-name">Alexandra Eala</div>
-            </div>
-
-            <div className="vs">VS</div>
-
-            <div className={`player-side player-side-right ${!won && latest ? "player-winner" : ""}`}>
-              <div className="player-name">{latestOpponent(latest)}</div>
-            </div>
-          </div>
-
           <div className="scoreboard">
             <div className="scoreboard-head">
-              <span>FINAL SCORE</span>
+              <span></span>
               <span>SET 1</span>
               <span>SET 2</span>
               <span>SET 3</span>
