@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { getEalaDashboard } from "@/lib/wta";
+import { getEalaDashboard } from "../lib/wta";
 
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";

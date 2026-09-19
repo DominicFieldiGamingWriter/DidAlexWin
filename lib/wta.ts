@@ -144,7 +144,7 @@ function opponentName(match: WtaMatch): string {
     : stringValue(match.team_name_1);
 
   if (team && team !== "BYE") {
-    return team.replace(/\\s+/g, " ").trim();
+    return team.replace(/\s+/g, " ").trim();
   }
 
   return "Opponent";
