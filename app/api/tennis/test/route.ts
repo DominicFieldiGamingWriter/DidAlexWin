@@ -1,27 +1,17 @@
 export const dynamic = "force-dynamic";
 
-const PLAYER_ID = 327924;
-const RAPIDAPI_HOST = "tennisapi1.p.rapidapi.com";
+const PLAYER_ID = 330332;
+const WTA_API = "https://api.wtatennis.com/tennis/players";
 
 export async function GET() {
-  const apiKey = process.env.RAPIDAPI_KEY;
-
-  if (!apiKey) {
-    return Response.json(
-      { ok: false, error: "RAPIDAPI_KEY is not configured" },
-      { status: 500 }
-    );
-  }
-
-  const url = `https://${RAPIDAPI_HOST}/api/tennis/player/${PLAYER_ID}/events/previous/0`;
+  const url = `${WTA_API}/${PLAYER_ID}/matches?page=0&pageSize=50&id=${PLAYER_ID}&year=&type=S&sort=desc&tournamentGroupId=`;
 
   try {
     const response = await fetch(url, {
-      headers: {
-        "x-rapidapi-key": apiKey,
-        "x-rapidapi-host": RAPIDAPI_HOST,
-      },
       cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
     });
 
     const body = await response.text();
@@ -30,7 +20,7 @@ export async function GET() {
       return Response.json(
         {
           ok: false,
-          error: "Tennis API request failed",
+          source: "WTA official API",
           status: response.status,
           details: body,
         },
@@ -38,17 +28,34 @@ export async function GET() {
       );
     }
 
+    let data: unknown;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return Response.json(
+        {
+          ok: false,
+          source: "WTA official API",
+          error: "WTA API returned non-JSON data",
+          raw: body,
+        },
+        { status: 502 }
+      );
+    }
+
     return Response.json({
       ok: true,
+      source: "WTA official API",
       playerId: PLAYER_ID,
-      source: RAPIDAPI_HOST,
-      data: JSON.parse(body),
+      endpoint: url,
+      data,
     });
   } catch (error) {
     return Response.json(
       {
         ok: false,
-        error: "Tennis API connection error",
+        source: "WTA official API",
+        error: "WTA API connection error",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
