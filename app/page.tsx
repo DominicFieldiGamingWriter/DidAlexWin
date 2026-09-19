@@ -254,13 +254,25 @@ export default async function Home() {
 
         <div className="upcoming-card">
           <div>
-            <div className="section-label">NEXT MATCH</div>
+            <div className="section-label">
+              {data.nextMatch
+                ? data.nextMatch.opponent === "TBA"
+                  ? "NEXT TOURNAMENT"
+                  : "NEXT MATCH"
+                : "NEXT MATCH"}
+            </div>
             <div className="upcoming-title">
-              {data.nextMatch?.opponent ?? "Waiting for scheduled fixture"}
+              {data.nextMatch
+                ? data.nextMatch.opponent === "TBA"
+                  ? formatTournament(data.nextMatch.tournament)
+                  : data.nextMatch.opponent
+                : "Waiting for scheduled fixture"}
             </div>
             <div className="upcoming-date">
               {data.nextMatch
-                ? `${formatTournament(data.nextMatch.tournament)} · ${data.nextMatch.round}`
+                ? data.nextMatch.opponent === "TBA"
+                  ? "Draw pending"
+                  : `${formatTournament(data.nextMatch.tournament)} · ${data.nextMatch.round}`
                 : "The next Alexandra Eala match will appear here automatically."}
             </div>
           </div>
