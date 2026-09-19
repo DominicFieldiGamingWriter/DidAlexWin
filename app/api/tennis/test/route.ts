@@ -1,62 +1,57 @@
 export const dynamic = "force-dynamic";
 
 const PLAYER_ID = 327924;
-const RAPIDAPI_HOST = "tennis-api-atp-wta-itf.p.rapidapi.com";
-const BASE_URL = `https://${RAPIDAPI_HOST}`;
+const RAPIDAPI_HOST = "tennisapi1.p.rapidapi.com";
 
-async function getJson(path: string) {
+export async function GET() {
   const apiKey = process.env.RAPIDAPI_KEY;
 
   if (!apiKey) {
-    throw new Error("RAPIDAPI_KEY is not configured");
-  }
-
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      "X-RapidAPI-Key": apiKey,
-      "X-RapidAPI-Host": RAPIDAPI_HOST,
-    },
-    cache: "no-store",
-  });
-
-  const body = await response.text();
-
-  let data: unknown;
-
-  try {
-    data = JSON.parse(body);
-  } catch {
-    data = body;
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `${path} returned ${response.status}: ${body.slice(0, 1000)}`
+    return Response.json(
+      { ok: false, error: "RAPIDAPI_KEY is not configured" },
+      { status: 500 }
     );
   }
 
-  return data;
-}
+  const url = `https://${RAPIDAPI_HOST}/api/tennis/player/${PLAYER_ID}/events/previous/0`;
 
-export async function GET() {
   try {
-    const profile = await getJson(
-      `/tennis/v2/wta/player/profile/${PLAYER_ID}?include=form,ranking,country`
-    );
+    const response = await fetch(url, {
+      headers: {
+        "x-rapidapi-key": apiKey,
+        "x-rapidapi-host": RAPIDAPI_HOST,
+      },
+      cache: "no-store",
+    });
+
+    const body = await response.text();
+
+    if (!response.ok) {
+      return Response.json(
+        {
+          ok: false,
+          error: "Tennis API request failed",
+          status: response.status,
+          details: body,
+        },
+        { status: 502 }
+      );
+    }
 
     return Response.json({
       ok: true,
       playerId: PLAYER_ID,
       source: RAPIDAPI_HOST,
-      profile,
+      data: JSON.parse(body),
     });
   } catch (error) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: "Tennis API connection error",
+        details: error instanceof Error ? error.message : String(error),
       },
-      { status: 502 }
+      { status: 500 }
     );
   }
 }
