@@ -1,0 +1,19 @@
+# Did Alex Win?
+
+> Did Alex Win? is a factual reference site for Alexandra Eala, the professional tennis player from the Philippines. It provides her latest completed singles match and result, upcoming fixture information, rankings, 2026 record, and Grand Slam record.
+
+The site's primary purpose is to answer whether Alexandra Eala won her latest completed singles match. Match data is sourced from the official WTA data service and updated automatically.
+
+## Site
+
+- [Did Alex Win?](https://didalexwin.com/): Current Alexandra Eala match result, next fixture, rankings, records and Grand Slam information.
+
+## Official sources
+
+- [Alexandra Eala - WTA](https://www.wtatennis.com/players/330332/name/alexandra-eala): Official WTA player profile and source for player information and tennis results.
+
+## Data notes
+
+- The headline result refers to Eala's latest completed singles match.
+- The site's 2026 record is calculated from the available WTA match-history data; it is not labelled as a career record.
+- Upcoming fixture information can remain TBA until the WTA draw and opponent are published.
