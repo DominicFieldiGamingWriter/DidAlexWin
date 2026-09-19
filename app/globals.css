@@ -136,7 +136,7 @@ body {
   color: #090d13;
   border: 2px solid #fcd116;
   border-radius: 28px;
-  padding: 32px;
+  padding: 28px 30px 24px;
 }
 
 .match-main {
@@ -166,13 +166,8 @@ body {
   letter-spacing: -1.7px;
 }
 
-.match-date-label {
-  margin-top: 15px;
-  font-size: 9px;
-}
-
 .match-date {
-  margin-top: 6px;
+  margin-top: 5px;
   color: #7084a1;
   font-size: 13px;
 }
@@ -223,12 +218,12 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 25px;
+  margin-top: 18px;
 }
 
 .match-details > div {
-  min-height: 86px;
-  padding: 14px;
+  min-height: 72px;
+  padding: 12px 14px;
   border-radius: 14px;
   background: #f3f6f8;
 }
@@ -646,7 +641,7 @@ footer {
 
 /* Explicit final-score table. The rows make the winner and set scores unambiguous. */
 .scoreboard {
-  margin-top: 26px;
+  margin-top: 20px;
   border-top: 1px solid #dfe4ea;
   border-bottom: 1px solid #dfe4ea;
 }
@@ -660,7 +655,7 @@ footer {
 }
 
 .scoreboard-head {
-  padding: 12px 0 9px;
+  padding: 9px 0 7px;
 }
 
 .scoreboard-head > span {
@@ -676,7 +671,7 @@ footer {
 }
 
 .score-row {
-  min-height: 58px;
+  min-height: 52px;
   border-top: 1px solid #edf0f3;
 }
 
