@@ -12,7 +12,7 @@ function records(payload: unknown, key = ""): Row[] {
   if (Array.isArray(payload)) return payload.filter((v): v is Row => !!v && typeof v === "object");
   if (!payload || typeof payload !== "object") return [];
   const o = payload as Row;
-  const v = key ? o[key] : o.content ?? o.matches;
+  const v = key ? o[key] : o.content ?? o.matches ?? o.players;
   return Array.isArray(v) ? v.filter((x): x is Row => !!x && typeof x === "object") : [];
 }
 function exactDate(m: Row) {
@@ -113,9 +113,66 @@ async function sync(){
     await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),highest_doubles_ranking=least(coalesce(public.eala_stats.highest_doubles_ranking,excluded.highest_doubles_ranking),excluded.highest_doubles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString()})]);
     const upcoming=singles.filter(m=>!completed(m)&&text(m.player_2)!=="BYE").map(m=>({m,d:matchStart(m)})).filter(x=>x.d&&Date.parse(x.d)>=Date.now()-3600000).sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
     if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.d,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify(m)]);}
-    else await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
-    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,Boolean(upcoming),runId]);
-    return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:Boolean(upcoming)};
+    else {
+      try {
+        const tournamentPayload = await getJson(WTA+"/tournaments?page=0&pageSize=100");
+        const upcomingTournaments = records(tournamentPayload,"tournaments")
+          .map(item => {
+            const group = item.tournamentGroup && typeof item.tournamentGroup === "object" ? item.tournamentGroup as Row : {};
+            return {
+              groupId: num(group.id),
+              year: num(item.year),
+              start: text(item.startDate),
+              end: text(item.endDate),
+              title: text(item.title),
+              surface: text(item.surface)
+            };
+          })
+          .filter(item => item.groupId !== null && item.year !== null && item.start && Date.parse(item.start) >= Date.now() - 36 * 60 * 60 * 1000)
+          .sort((a,b) => Date.parse(a.start)-Date.parse(b.start));
+
+        let placeholder: Row | null = null;
+        for (const t of upcomingTournaments) {
+          try {
+            const payload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
+            const players = records(payload,"players").length ? records(payload,"players") : records(payload);
+            if (!players.some(playerIdsMatch)) continue;
+            placeholder = t as Row;
+            break;
+          } catch {}
+        }
+
+        if (placeholder) {
+          await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[
+            EALA_ID,
+            text(placeholder.title) || "Upcoming tournament",
+            "TBA",
+            "TBA",
+            null,
+            text(placeholder.surface) || "—",
+            "—",
+            text(placeholder.start) || null,
+            text(placeholder.end) || null,
+            null,
+            JSON.stringify({source:"WTA tournament entry",entry_confirmed:true})
+          ]);
+        } else {
+          await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
+        }
+      } catch {
+        await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
+      }
+    }
+    const found=Boolean(upcoming);
+    const placeholderExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
+    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,found||placeholderExists,runId]);
+    return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:found||placeholderExists};
   }catch(e){await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);throw e;}
+}
+function playerIdsMatch(value: unknown): boolean {
+  if (typeof value === "string" || typeof value === "number") return String(value) === String(EALA_ID);
+  if (Array.isArray(value)) return value.some(playerIdsMatch);
+  if (typeof value === "object" && value !== null) return Object.values(value as Row).some(playerIdsMatch);
+  return false;
 }
 Deno.serve(async(req)=>{if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});try{return Response.json(await sync());}catch(e){console.error(e);return Response.json({ok:false,error:e instanceof Error?e.message:"Sync failed"},{status:500});}});
