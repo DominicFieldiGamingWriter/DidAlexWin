@@ -7,11 +7,11 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Did Alex Win?",
+    default: "Did Alex Win? | Alexandra Eala Latest Result",
     template: "%s | Did Alex Win?",
   },
   description:
-    "Alexandra Eala match results, rankings, upcoming fixtures and Grand Slam record.",
+    "Did Alexandra Eala win her latest match? Check her latest result, next match, current ranking, 2026 record and Grand Slam record.",
   alternates: {
     canonical: "/",
   },
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     siteName: "Did Alex Win?",
     title: "Did Alex Win?",
     description:
-      "Alexandra Eala match results, rankings, upcoming fixtures and Grand Slam record.",
+      "Did Alexandra Eala win her latest match? Check her latest result, next match, current ranking, 2026 record and Grand Slam record.",
     images: [
       {
         url: "/alex-bio.webp",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Did Alex Win?",
     description:
-      "Alexandra Eala match results, rankings, upcoming fixtures and Grand Slam record.",
+      "Did Alexandra Eala win her latest match? Check her latest result, next match, current ranking, 2026 record and Grand Slam record.",
     images: ["/alex-bio.webp"],
   },
   robots: {
