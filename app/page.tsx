@@ -330,8 +330,8 @@ export default async function Home() {
           <div className="stats-column">
             <h3>SINGLES</h3>
             <div className="stats-list">
-              <div><span>2026 record</span><strong>{data.singlesRecord.wins}–{data.singlesRecord.losses}</strong></div>
-              <div><span>Career titles</span><strong>{data.singlesTitles}</strong></div>
+              <div><span>Record</span><strong>{data.singlesRecord.wins}–{data.singlesRecord.losses}</strong></div>
+              <div><span>Titles</span><strong>{data.singlesTitles}</strong></div>
               <div><span>Highest ranking</span><strong>No. {data.highestSinglesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
             </div>
@@ -340,8 +340,8 @@ export default async function Home() {
           <div className="stats-column">
             <h3 className="doubles-heading">DOUBLES</h3>
             <div className="stats-list">
-              <div><span>2026 record</span><strong>{data.doublesRecord.wins}–{data.doublesRecord.losses}</strong></div>
-              <div><span>Career titles</span><strong>{data.doublesTitles}</strong></div>
+              <div><span>Record</span><strong>{data.doublesRecord.wins}–{data.doublesRecord.losses}</strong></div>
+              <div><span>Titles</span><strong>{data.doublesTitles}</strong></div>
               <div><span>Highest ranking</span><strong>No. {data.highestDoublesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
             </div>
