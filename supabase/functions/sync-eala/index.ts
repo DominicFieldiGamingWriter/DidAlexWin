@@ -77,7 +77,7 @@ async function authorized(req: Request) {
 }
 
 async function dbHttpGetJson(url: string) {
-  const rows = await q("select status, content from extensions.http_get($1, timeout := 15000)", [url]);
+  const rows = await q("select status, content from extensions.http_get($1::varchar)", [url]);
   const response = rows[0] as Row | undefined;
   const status = num(response?.status);
   if (status === null || status < 200 || status >= 300) {
