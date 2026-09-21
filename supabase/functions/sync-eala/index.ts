@@ -375,7 +375,7 @@ async function refreshExactMatchStart(candidate: Row) {
     if (!exact) return;
     const merged = JSON.stringify({ MatchTimeStamp: exact.ts, Venue: exact.m.Venue ?? null });
     await q("update public.eala_matches set match_start=$1, raw_json=raw_json || $2::jsonb, updated_at=now() where player_id=$3 and category='singles' and raw_json->>'tourn_year'=$4 and raw_json->>'round_name'=$5 and raw_json->>'player_1'=$6 and raw_json->>'player_2'=$7", [
-      exact.ts,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2,merged
+      exact.ts,merged,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2
     ]);
   } catch {}
 }
