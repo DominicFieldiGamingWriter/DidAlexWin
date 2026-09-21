@@ -390,7 +390,7 @@ async function refreshExactMatchStart(candidate: Row) {
   const drawSize = num(t.singlesDrawSize);
   if (groupId === null || year === null) return;
   try {
-    const payload = await getJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
+    const payload = await dbHttpGetJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
     const matches = records(payload, "matches");
     const candidateP1 = text(candidate.player_1), candidateP2 = text(candidate.player_2), candidateRound = text(candidate.round_name);
     const exact = matches
