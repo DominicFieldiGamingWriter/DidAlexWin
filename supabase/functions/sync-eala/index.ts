@@ -78,7 +78,7 @@ async function authorized(req: Request) {
 
 async function sync(){
   const recent=await q("select started_at from public.eala_sync_runs order by started_at desc limit 1");
-  if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<240000)return {skipped:true};
+  if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<30000)return {skipped:true};
   const run=await q("insert into public.eala_sync_runs(started_at) values(now()) returning id"); const runId=run[0].id;
   try{
     const [profile,sPayload,dPayload]=await Promise.all([
@@ -103,6 +103,8 @@ async function sync(){
     }
     const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&matchStart(m)&&new Date(matchStart(m)).getUTCFullYear()===year);
     const cs=cy(singles),cd=cy(doubles);
+    const latestCandidate=cs.slice().sort((a,b)=>Date.parse(matchStart(b))-Date.parse(matchStart(a)) || roundRank(text(b.round_name))-roundRank(text(a.round_name)))[0];
+    if(latestCandidate) await refreshExactMatchStart(latestCandidate);
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
     const losses=(a:Row[])=>a.filter(m=>won(m)===false).length;
     const titles=(a:Row[])=>a.filter(m=>text(m.round_name)==="F"&&won(m)===true&&!/125/.test(tournamentName(m))).length;
@@ -155,18 +157,50 @@ async function sync(){
         }
 
         if (placeholder) {
+          let tournamentRecord = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null as string | null, source: {source:"WTA tournament entry",entry_confirmed:true} };
+          try {
+            const drawPayload = await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
+            const drawEvent = drawEvents(drawPayload).find(event =>
+              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
+            );
+            if (drawEvent) {
+              const drawSize = num(drawEvent.DrawSize) ?? 32;
+              const drawMatches = drawEventMatches(drawEvent);
+              const future = drawMatches
+                .filter(item => drawMatchContainsEala(item.match) && num(item.match.finished) !== 1 && text(item.match.mState).toUpperCase() !== "F")
+                .sort((a,b) => a.roundId - b.roundId)[0];
+              if (future) {
+                const roundName = roundNameFromDrawId(future.roundId) || "TBA";
+                const matchPlayers = drawMatchPlayers(future.match);
+                const opponentName = findDrawOpponent(drawEvent, future.match, future.roundId);
+                const timeStamp = text(future.match.MatchTimeStamp);
+                tournamentRecord = {
+                  tournament: text(drawEvent.TournamentTitle) || text(placeholder.title) || "Upcoming tournament",
+                  roundName,
+                  opponent: opponentName,
+                  matchStart: timeStamp && !Number.isNaN(Date.parse(timeStamp)) ? timeStamp : null,
+                  source: {
+                    source:"WTA tournament draw",
+                    draw_match_id:text(future.match.Id),
+                    draw_round_id:future.roundId,
+                    draw_size:drawSize
+                  }
+                };
+              }
+            }
+          } catch {}
           await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[
             EALA_ID,
-            text(placeholder.title) || "Upcoming tournament",
-            "TBA",
-            "TBA",
-            null,
+            tournamentRecord.tournament,
+            tournamentRecord.roundName,
+            tournamentRecord.opponent,
+            tournamentRecord.matchStart,
             text(placeholder.surface) || "—",
             "—",
             text(placeholder.start) || null,
             text(placeholder.end) || null,
             null,
-            JSON.stringify({source:"WTA tournament entry",entry_confirmed:true})
+            JSON.stringify(tournamentRecord.source)
           ]);
         } else {
           await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
@@ -186,6 +220,169 @@ function playerIdsMatch(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(playerIdsMatch);
   if (typeof value === "object" && value !== null) return Object.values(value as Row).some(playerIdsMatch);
   return false;
+}
+
+function roundNameFromDrawId(roundId: number | null) {
+  return ({1:"F",2:"S",3:"Q",4:"R16",5:"R32",6:"R64",7:"R128"} as Record<number,string>)[roundId ?? 0] ?? "";
+}
+
+function roundNameFromTournamentRoundId(roundId: number | null, drawSize: number | null) {
+  if (roundId === null || !drawSize) return "";
+  const size = 2 ** roundId;
+  if (size === 2) return "F";
+  if (size === 4) return "S";
+  if (size === 8) return "Q";
+  if (size === 16) return "R16";
+  if (size === 32) return "R32";
+  if (size === 64) return "R64";
+  if (size === 128) return "R128";
+  return "";
+}
+
+function drawEvents(payload: unknown): Row[] {
+  if (!payload || typeof payload !== "object") return [];
+  const raw = (payload as Row).drawInfo;
+  if (!Array.isArray(raw)) return [];
+  const events: Row[] = [];
+  for (const item of raw) {
+    let value: unknown = item;
+    if (typeof item === "string") {
+      try { value = JSON.parse(item); } catch { continue; }
+    }
+    if (!value || typeof value !== "object") continue;
+    const eventList = (((value as Row).Draws as Row | undefined)?.Events as Row | undefined)?.Event;
+    if (!Array.isArray(eventList)) continue;
+    for (const event of eventList) {
+      if (event && typeof event === "object") events.push(event as Row);
+    }
+  }
+  return events;
+}
+
+function drawMatchPlayers(match: Row): Row[] {
+  const pts = ((match.Players as Row | undefined)?.PT);
+  if (!Array.isArray(pts)) return [];
+  return pts.filter((pt): pt is Row => !!pt && typeof pt === "object");
+}
+
+function drawPlayerId(pt: Row) {
+  const player = pt.Player && typeof pt.Player === "object" ? pt.Player as Row : {};
+  const id = num(player.id);
+  return id ?? null;
+}
+
+function drawPlayerName(pt: Row) {
+  const player = pt.Player && typeof pt.Player === "object" ? pt.Player as Row : {};
+  return text(pt.PTDisplayLine) || [text(player.FirstName), text(player.SurName)].filter(Boolean).join(" ").trim();
+}
+
+function drawMatchContainsEala(match: Row) {
+  return drawMatchPlayers(match).some(pt => drawPlayerId(pt) === EALA_ID);
+}
+
+function drawEventMatches(event: Row) {
+  const rounds = (((event.Results as Row | undefined)?.Round));
+  if (!Array.isArray(rounds)) return [] as Array<{roundId:number,match:Row}>;
+  const result: Array<{roundId:number,match:Row}> = [];
+  for (const round of rounds) {
+    if (!round || typeof round !== "object") continue;
+    const roundId = num((round as Row).roundId);
+    const matches = (round as Row).Match;
+    if (roundId === null || !Array.isArray(matches)) continue;
+    for (const match of matches) {
+      if (match && typeof match === "object") result.push({ roundId, match: match as Row });
+    }
+  }
+  return result;
+}
+
+function drawLinePositions(event: Row) {
+  const lines = (((event.Draw as Row | undefined)?.DrawLine));
+  const positions = new Map<number,{id:number,name:string}>();
+  if (!Array.isArray(lines)) return positions;
+  for (const line of lines) {
+    if (!line || typeof line !== "object") continue;
+    const pos = num((line as Row).Pos);
+    if (pos === null) continue;
+    const player = (line as Row).Players && typeof (line as Row).Players === "object"
+      ? ((line as Row).Players as Row).Player
+      : null;
+    if (!player || typeof player !== "object") continue;
+    const id = num((player as Row).id) ?? 0;
+    const name = text((line as Row).DisplayLine) || text((player as Row).PlayerDisplayLine);
+    positions.set(id, { id, name });
+  }
+  return positions;
+}
+
+function findDrawOpponent(event: Row, current: Row, currentRoundId: number) {
+  const players = drawMatchPlayers(current);
+  const direct = players.find(pt => {
+    const id = drawPlayerId(pt);
+    return id !== null && id !== 0 && id !== EALA_ID && !/^bye$|^n\/a$/i.test(drawPlayerName(pt));
+  });
+  if (direct) return drawPlayerName(direct);
+
+  const positions = drawLinePositions(event);
+  const ealaLine = [...positions.entries()].find(([, info]) => info.id === EALA_ID);
+  if (!ealaLine) return "TBA";
+  const ealaPos = ealaLine[0];
+  const blockStart = Math.floor((ealaPos - 1) / 4) * 4 + 1;
+  const previous = drawEventMatches(event).filter(item => item.roundId === currentRoundId + 1 && !drawMatchContainsEala(item.match));
+  const feeder = previous.find(item => drawMatchPlayers(item.match).some(pt => {
+    const id = drawPlayerId(pt);
+    if (id === null || id === 0 || id === EALA_ID) return false;
+    const info = positions.get(id);
+    return !!info && [...Array(4)].some((_, offset) => info.id === id && (positionsToPos(positions, id) ?? 0) >= blockStart + offset && (positionsToPos(positions, id) ?? 0) <= blockStart + 3);
+  }));
+  if (!feeder) return "TBA";
+
+  const feederPlayers = drawMatchPlayers(feeder.match).filter(pt => {
+    const id = drawPlayerId(pt);
+    return id !== null && id !== 0 && id !== EALA_ID && !/^bye$|^n\/a$/i.test(drawPlayerName(pt));
+  });
+  const finished = num(feeder.match.finished) === 1 || text(feeder.match.mState).toUpperCase() === "F";
+  if (finished) {
+    const winnerCode = text((feeder.match.Result as Row | undefined)?.winnerPTId);
+    const winner = feederPlayers.find(pt => text(pt.id) === winnerCode);
+    if (winner) return drawPlayerName(winner);
+  }
+  if (feederPlayers.length === 1) return drawPlayerName(feederPlayers[0]);
+  if (feederPlayers.length >= 2) return "Winner of " + feederPlayers.slice(0, 2).map(drawPlayerName).join(" / ");
+  return "TBA";
+}
+
+function positionsToPos(positions: Map<number,{id:number,name:string}>, id: number) {
+  for (const [pos, info] of positions.entries()) if (info.id === id) return pos;
+  return null;
+}
+
+async function refreshExactMatchStart(candidate: Row) {
+  const t = tournament(candidate);
+  const group = t.tournamentGroup && typeof t.tournamentGroup === "object" ? t.tournamentGroup as Row : {};
+  const groupId = num(group.id) ?? num(t.id) ?? num(candidate.tournamentId);
+  const year = num(t.year) ?? num(candidate.tourn_year);
+  const drawSize = num(t.singlesDrawSize);
+  if (groupId === null || year === null) return;
+  try {
+    const payload = await getJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
+    const matches = records(payload, "matches");
+    const candidateP1 = text(candidate.player_1), candidateP2 = text(candidate.player_2), candidateRound = text(candidate.round_name);
+    const exact = matches
+      .filter(m => text(m.PlayerIDA) === String(EALA_ID) || text(m.PlayerIDB) === String(EALA_ID))
+      .map(m => ({ m, ts: text(m.MatchTimeStamp), round: roundNameFromTournamentRoundId(num(m.RoundID), drawSize) }))
+      .filter(x => x.ts && !Number.isNaN(Date.parse(x.ts)) && x.round === candidateRound)
+      .filter(x => {
+        const p1 = text(x.m.PlayerIDA), p2 = text(x.m.PlayerIDB);
+        return (p1 === candidateP1 || p1 === candidateP2 || p2 === candidateP1 || p2 === candidateP2);
+      })
+      .sort((a,b) => Date.parse(b.ts) - Date.parse(a.ts))[0];
+    if (!exact) return;
+    const merged = JSON.stringify({ MatchTimeStamp: exact.ts, Venue: exact.m.Venue ?? null });
+    await q("update public.eala_matches set match_start=$1, raw_json=raw_json || $2::jsonb, updated_at=now() where player_id=$3 and category='singles' and raw_json->>'tourn_year'=$4 and raw_json->>'round_name'=$5 and raw_json->>'player_1'=$6 and raw_json->>'player_2'=$7", [
+      exact.ts,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2,merged
+    ]);
+  } catch {}
 }
 Deno.serve(async(req)=>{
   if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
