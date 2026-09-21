@@ -103,12 +103,12 @@ async function sync(){
     }
     const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&matchStart(m)&&new Date(matchStart(m)).getUTCFullYear()===year);
     const cs=cy(singles),cd=cy(doubles);
+    const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
     const latestCandidate=cs.slice().sort((a,b)=>Date.parse(matchStart(b))-Date.parse(matchStart(a)) || roundRank(text(b.round_name))-roundRank(text(a.round_name)))[0];
     if(latestCandidate) await refreshExactMatchStart(latestCandidate);
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
     const losses=(a:Row[])=>a.filter(m=>won(m)===false).length;
     const titles=(a:Row[])=>a.filter(m=>text(m.round_name)==="F"&&won(m)===true&&!/125/.test(tournamentName(m))).length;
-    const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
     const grandSlams:Record<string,{wins:number,losses:number,best:string}>={};
     for(const m of singles){
       if(!completed(m))continue;
@@ -298,7 +298,7 @@ function drawEventMatches(event: Row) {
 
 function drawLinePositions(event: Row) {
   const lines = (((event.Draw as Row | undefined)?.DrawLine));
-  const positions = new Map<number,{id:number,name:string}>();
+  const positions = new Map<number,{pos:number,name:string}>();
   if (!Array.isArray(lines)) return positions;
   for (const line of lines) {
     if (!line || typeof line !== "object") continue;
@@ -310,7 +310,7 @@ function drawLinePositions(event: Row) {
     if (!player || typeof player !== "object") continue;
     const id = num((player as Row).id) ?? 0;
     const name = text((line as Row).DisplayLine) || text((player as Row).PlayerDisplayLine);
-    positions.set(id, { id, name });
+    positions.set(id, { pos, name });
   }
   return positions;
 }
@@ -324,16 +324,15 @@ function findDrawOpponent(event: Row, current: Row, currentRoundId: number) {
   if (direct) return drawPlayerName(direct);
 
   const positions = drawLinePositions(event);
-  const ealaLine = [...positions.entries()].find(([, info]) => info.id === EALA_ID);
-  if (!ealaLine) return "TBA";
-  const ealaPos = ealaLine[0];
-  const blockStart = Math.floor((ealaPos - 1) / 4) * 4 + 1;
+  const ealaInfo = positions.get(EALA_ID);
+  if (!ealaInfo) return "TBA";
+  const blockStart = Math.floor((ealaInfo.pos - 1) / 4) * 4 + 1;
   const previous = drawEventMatches(event).filter(item => item.roundId === currentRoundId + 1 && !drawMatchContainsEala(item.match));
   const feeder = previous.find(item => drawMatchPlayers(item.match).some(pt => {
     const id = drawPlayerId(pt);
     if (id === null || id === 0 || id === EALA_ID) return false;
     const info = positions.get(id);
-    return !!info && [...Array(4)].some((_, offset) => info.id === id && (positionsToPos(positions, id) ?? 0) >= blockStart + offset && (positionsToPos(positions, id) ?? 0) <= blockStart + 3);
+    return !!info && info.pos >= blockStart && info.pos <= blockStart + 3;
   }));
   if (!feeder) return "TBA";
 
@@ -352,10 +351,6 @@ function findDrawOpponent(event: Row, current: Row, currentRoundId: number) {
   return "TBA";
 }
 
-function positionsToPos(positions: Map<number,{id:number,name:string}>, id: number) {
-  for (const [pos, info] of positions.entries()) if (info.id === id) return pos;
-  return null;
-}
 
 async function refreshExactMatchStart(candidate: Row) {
   const t = tournament(candidate);
