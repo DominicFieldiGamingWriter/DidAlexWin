@@ -76,6 +76,27 @@ async function authorized(req: Request) {
   return token === String(rows[0]?.decrypted_secret ?? "");
 }
 
+async function dbHttpGetJson(url: string) {
+  const requestRows = await q("select net.http_get($1, timeout_milliseconds := 15000) as request_id", [url]);
+  const requestId = Number(requestRows[0]?.request_id);
+  if (!requestId) throw new Error("WTA HTTP request could not be created");
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const rows = await q("select status_code, content, error_msg from net._http_response where id = $1 limit 1", [requestId]);
+    const response = rows[0] as Row | undefined;
+    if (response) {
+      const status = num(response.status_code);
+      if (status === null || status < 200 || status >= 300) {
+        throw new Error("WTA database HTTP returned " + String(response.status_code ?? "unknown") + (text(response.error_msg) ? ": " + text(response.error_msg) : ""));
+      }
+      const raw = text(response.content);
+      if (!raw) throw new Error("WTA database HTTP returned empty content");
+      return JSON.parse(raw);
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error("WTA database HTTP request timed out");
+}
+
 async function sync(){
   const recent=await q("select started_at from public.eala_sync_runs order by started_at desc limit 1");
   if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<30000)return {skipped:true};
@@ -150,7 +171,7 @@ async function sync(){
         for (const t of upcomingTournaments.slice(0, 8)) {
           if (t.groupId === null || t.year === null) continue;
           try {
-            const drawPayload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draws");
+            const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draws");
             const drawEvent = drawEvents(drawPayload).find(event =>
               text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
             );
@@ -179,7 +200,7 @@ async function sync(){
         if (placeholder) {
           let tournamentRecord = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null as string | null, source: {source:"WTA tournament entry",entry_confirmed:true} };
           try {
-            const drawPayload = await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
+            const drawPayload = placeholderDraw ? { drawInfo: [] } : await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
             const drawEvent = drawEvents(drawPayload).find(event =>
               text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
             );
