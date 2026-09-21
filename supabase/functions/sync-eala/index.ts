@@ -259,16 +259,14 @@ function roundNameFromDrawId(roundId: number | null) {
 }
 
 function roundNameFromTournamentRoundId(roundId: number | null, drawSize: number | null) {
-  if (roundId === null || !drawSize) return "";
-  const size = 2 ** roundId;
-  if (size === 2) return "F";
-  if (size === 4) return "S";
-  if (size === 8) return "Q";
-  if (size === 16) return "R16";
-  if (size === 32) return "R32";
-  if (size === 64) return "R64";
-  if (size === 128) return "R128";
-  return "";
+  if (roundId === null || !drawSize || roundId < 1) return "";
+  const roundsByDrawSize: Record<number, string[]> = {
+    32: ["R32", "R16", "Q", "S", "F"],
+    64: ["R64", "R32", "R16", "Q", "S", "F"],
+    96: ["R128", "R64", "R32", "R16", "Q", "S", "F"],
+    128: ["R128", "R64", "R32", "R16", "Q", "S", "F"],
+  };
+  return roundsByDrawSize[drawSize]?.[roundId - 1] ?? "";
 }
 
 function drawEvents(payload: unknown): Row[] {
