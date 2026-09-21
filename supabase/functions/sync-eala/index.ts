@@ -77,24 +77,15 @@ async function authorized(req: Request) {
 }
 
 async function dbHttpGetJson(url: string) {
-  const requestRows = await q("select net.http_get($1, timeout_milliseconds := 15000) as request_id", [url]);
-  const requestId = Number(requestRows[0]?.request_id);
-  if (!requestId) throw new Error("WTA HTTP request could not be created");
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const rows = await q("select status_code, content, error_msg from net._http_response where id = $1 limit 1", [requestId]);
-    const response = rows[0] as Row | undefined;
-    if (response) {
-      const status = num(response.status_code);
-      if (status === null || status < 200 || status >= 300) {
-        throw new Error("WTA database HTTP returned " + String(response.status_code ?? "unknown") + (text(response.error_msg) ? ": " + text(response.error_msg) : ""));
-      }
-      const raw = text(response.content);
-      if (!raw) throw new Error("WTA database HTTP returned empty content");
-      return JSON.parse(raw);
-    }
-    await new Promise(resolve => setTimeout(resolve, 250));
+  const rows = await q("select status, content from extensions.http_get($1, timeout := 15000)", [url]);
+  const response = rows[0] as Row | undefined;
+  const status = num(response?.status);
+  if (status === null || status < 200 || status >= 300) {
+    throw new Error("WTA HTTP returned " + String(response?.status ?? "unknown"));
   }
-  throw new Error("WTA database HTTP request timed out");
+  const raw = text(response?.content);
+  if (!raw) throw new Error("WTA HTTP returned empty content");
+  return JSON.parse(raw);
 }
 
 async function sync(){
