@@ -7,7 +7,14 @@ const q = (text: string, params: unknown[] = []) => db.unsafe(text, params);
 
 type Row = Record<string, unknown>;
 const text = (v: unknown) => typeof v === "string" ? v : "";
-const num = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? v : null;
+const num = (v: unknown) => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const parsed = Number(v);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
 function records(payload: unknown, key = ""): Row[] {
   if (Array.isArray(payload)) return payload.filter((v): v is Row => !!v && typeof v === "object");
   if (!payload || typeof payload !== "object") return [];
