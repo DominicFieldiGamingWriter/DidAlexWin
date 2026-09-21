@@ -167,7 +167,7 @@ async function sync(){
           .sort((a,b) => Date.parse(a.start)-Date.parse(b.start));
 
         let placeholder: Row | null = null;
-        let placeholderDraw: Row | null = null;
+        let placeholderDrawPayload: unknown = null;
         for (const t of upcomingTournaments.slice(0, 8)) {
           if (t.groupId === null || t.year === null) continue;
           try {
@@ -182,7 +182,7 @@ async function sync(){
               );
               if (hasEala) {
                 placeholder = t as Row;
-                placeholderDraw = drawEvent;
+                placeholderDrawPayload = drawPayload;
                 break;
               }
             }
@@ -200,7 +200,7 @@ async function sync(){
         if (placeholder) {
           let tournamentRecord = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null as string | null, source: {source:"WTA tournament entry",entry_confirmed:true} };
           try {
-            const drawPayload = placeholderDraw ? { drawInfo: [] } : await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
+            const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
             const drawEvent = drawEvents(drawPayload).find(event =>
               text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
             );
