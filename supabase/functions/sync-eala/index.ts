@@ -171,7 +171,7 @@ async function sync(){
         for (const t of upcomingTournaments.slice(0, 8)) {
           if (t.groupId === null || t.year === null) continue;
           try {
-            const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draws");
+            const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
             const drawEvent = drawEvents(drawPayload).find(event =>
               text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
             );
@@ -200,7 +200,7 @@ async function sync(){
         if (placeholder) {
           let tournamentRecord = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null as string | null, source: {source:"WTA tournament entry",entry_confirmed:true} };
           try {
-            const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draws");
+            const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent = drawEvents(drawPayload).find(event =>
               text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
             );
