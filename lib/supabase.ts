@@ -78,8 +78,27 @@ function roundRank(round: string | null) {
   )[round ?? ""] ?? 0;
 }
 
+function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
+  if (!raw || typeof raw !== "object") return NaN;
+  for (const key of ["MatchTimeStamp", "matchDate", "match_date", "scheduledTime", "scheduled_time"]) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value === "string" && value) {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+  }
+  return NaN;
+}
+
 function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
   const sorted = [...matches].sort((a, b) => {
+    const exactDifference =
+      exactMatchTimestamp(b.raw_json) - exactMatchTimestamp(a.raw_json);
+
+    if (!Number.isNaN(exactDifference) && exactDifference !== 0) {
+      return exactDifference;
+    }
+
     const dateDifference =
       Date.parse(b.match_start ?? "") - Date.parse(a.match_start ?? "");
 
