@@ -146,13 +146,33 @@ async function sync(){
           .sort((a,b) => Date.parse(a.start)-Date.parse(b.start));
 
         let placeholder: Row | null = null;
-        for (const t of upcomingTournaments) {
+        let placeholderDraw: Row | null = null;
+        for (const t of upcomingTournaments.slice(0, 8)) {
+          if (t.groupId === null || t.year === null) continue;
+          try {
+            const drawPayload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draws");
+            const drawEvent = drawEvents(drawPayload).find(event =>
+              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
+            );
+            if (drawEvent) {
+              const lines = ((drawEvent.Draw as Row | undefined)?.DrawLine);
+              const hasEala = Array.isArray(lines) && lines.some(line =>
+                !!line && typeof line === "object" && playerIdsMatch((line as Row).Players)
+              );
+              if (hasEala) {
+                placeholder = t as Row;
+                placeholderDraw = drawEvent;
+                break;
+              }
+            }
+          } catch {}
           try {
             const payload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
             const players = records(payload,"players").length ? records(payload,"players") : records(payload);
-            if (!players.some(playerIdsMatch)) continue;
-            placeholder = t as Row;
-            break;
+            if (players.some(playerIdsMatch)) {
+              placeholder = t as Row;
+              break;
+            }
           } catch {}
         }
 
