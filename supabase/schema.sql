@@ -1,6 +1,8 @@
 -- DidAlexWin / Supabase schema
 -- Separate namespace for the Eala site. Nothing here is used by BBD/Hamza.
 
+create extension if not exists http with schema extensions;
+
 create table if not exists public.eala_player (
   player_id bigint primary key,
   name text not null,
