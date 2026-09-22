@@ -19,6 +19,7 @@ type SupabaseMatch = {
 };
 
 type SupabaseStats = {
+  updated_at: string | null;
   singles_wins: number | null;
   singles_losses: number | null;
   doubles_wins: number | null;
@@ -119,7 +120,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
         `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,round_name,eala_won,raw_json&limit=500`
       ),
       fetchTable<SupabaseStats>(
-        `eala_stats?player_id=eq.${EALA_ID}&select=singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles&limit=1`
+        `eala_stats?player_id=eq.${EALA_ID}&select=updated_at,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles&limit=1`
       ),
       fetchTable<SupabaseRanking>(
         `eala_rankings?player_id=eq.${EALA_ID}&select=ranking_type,ranking&order=ranking_date.desc&limit=20`
@@ -140,6 +141,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
     const next = nextRows[0];
 
     return {
+      lastUpdated: stats.updated_at ?? null,
       latestMatch: latestMatch(matches),
       nextMatch: next
         ? {

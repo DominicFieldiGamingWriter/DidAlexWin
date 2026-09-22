@@ -15,6 +15,22 @@ function formatDate(value: unknown) {
   });
 }
 
+function formatDateTime(value: unknown) {
+  if (typeof value !== "string" || !value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
+}
+
 function formatDateRange(start: unknown, end: unknown) {
   if (typeof start !== "string" || !start) return "";
   const startDate = new Date(start);
@@ -325,7 +341,12 @@ export default async function Home() {
       </section>
 
       <section className="career-card">
-        <h2 className="section-title">2026 RECORD</h2>
+        <div className="career-heading-row">
+          <h2 className="section-title">2026 RECORD</h2>
+          <span className="stats-updated">
+            Last updated at {formatDateTime(data.lastUpdated)}
+          </span>
+        </div>
 
         <div className="stats-grid">
           <div className="stats-column">

@@ -6,6 +6,7 @@ const FIVE_MINUTES = 300;
 export type WtaMatch = Record<string, unknown>;
 
 export type DashboardData = {
+  lastUpdated: string | null;
   latestMatch: WtaMatch | null;
   nextMatch: {
     tournament: string;
@@ -461,6 +462,7 @@ export async function getEalaDashboard(): Promise<DashboardData> {
   const doublesRecord = rankRecord(doubles);
 
   return {
+    lastUpdated: new Date().toISOString(),
     latestMatch,
     nextMatch:
       singlesResult.ok || doublesResult.ok
