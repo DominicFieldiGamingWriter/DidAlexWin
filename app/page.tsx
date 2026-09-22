@@ -86,12 +86,13 @@ function scoreRows(match: Record<string, unknown> | null) {
   if (!match) return { eala: [], opponent: [] };
 
   const sets = parseScores(match.scores);
-  const teamOne = String(match.team_name_1 ?? "").toUpperCase();
-  const ealaScoresFirst = teamOne.includes("EALA");
+  // The WTA feed's player_1/player_2 fields are the reliable ordering for
+  // scores. team_name_1/team_name_2 is not consistently aligned with them.
+  const ealaIsPlayer1 = String(match.player_1) === "330332";
 
   return {
-    eala: sets.map((set) => (ealaScoresFirst ? set.first : set.second)),
-    opponent: sets.map((set) => (ealaScoresFirst ? set.second : set.first)),
+    eala: sets.map((set) => (ealaIsPlayer1 ? set.first : set.second)),
+    opponent: sets.map((set) => (ealaIsPlayer1 ? set.second : set.first)),
   };
 }
 
