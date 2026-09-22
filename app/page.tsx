@@ -369,8 +369,7 @@ export default async function Home() {
       </section>
 
       <footer>
-        Did Alex Win? · Alexandra Eala · Philippines
-        <span className="footer-source">· Data from WTA · Updated automatically</span>
+        Did Alex Win? · <span className="footer-source">Data from WTA</span>
       </footer>
     </main>
   );
