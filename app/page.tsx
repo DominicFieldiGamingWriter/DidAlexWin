@@ -257,7 +257,7 @@ export default async function Home() {
           </div>
         </div>
       </section>
->
+
       <section className="upcoming-section">
         <div className="section-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
