@@ -5,9 +5,12 @@ const FIVE_MINUTES = 300;
 
 export type WtaMatch = Record<string, unknown>;
 
+export type RecentResult = { result: "W" | "L"; opponent: string; tournament: string; date: string; round: string };
+
 export type DashboardData = {
   lastUpdated: string | null;
   latestMatch: WtaMatch | null;
+  recentSingles: RecentResult[];
   nextMatch: {
     tournament: string;
     round: string;
@@ -26,7 +29,7 @@ export type DashboardData = {
   doublesTitles: number;
   highestSinglesRank: number | null;
   highestDoublesRank: number | null;
-  grandSlams: Record<string, { wins: number; losses: number; best: string }>;
+  grandSlams: Record<string, { wins: number; losses: number; best: string; bestYear?: number | null }>;
 };
 
 const WTA_FETCH_TIMEOUT_MS = 10_000;
@@ -262,6 +265,10 @@ function bestRound(current: string, candidate: string): string {
   return roundRank(candidate) > roundRank(current) ? candidate : current;
 }
 
+function recentSingles(matches: WtaMatch[]): RecentResult[] {
+  return [...matches].filter(isCompleted).sort((a,b)=>matchSortKey(b)-matchSortKey(a)).slice(0,5).map(match=>({result:ealaWon(match)===true?"W":"L",opponent:opponentName(match),tournament:stringValue(match.TournamentName)||"Tournament",date:formatDate(exactMatchDate(match)||tournamentDates(match).end),round:stringValue(match.round_name)||"—"}));
+}
+
 function buildGrandSlams(matches: WtaMatch[]) {
   const result: DashboardData["grandSlams"] = {};
 
@@ -272,16 +279,15 @@ function buildGrandSlams(matches: WtaMatch[]) {
     if (!key) continue;
 
     if (!result[key]) {
-      result[key] = { wins: 0, losses: 0, best: "" };
+      result[key] = { wins: 0, losses: 0, best: "", bestYear: null };
     }
 
     if (ealaWon(match) === true) result[key].wins += 1;
     if (ealaWon(match) === false) result[key].losses += 1;
 
-    result[key].best = bestRound(
-      result[key].best,
-      stringValue(match.round_name)
-    );
+    const candidateRound=stringValue(match.round_name);
+    const candidateYear=numberValue(match.tourn_year??(typeof match.tournament==="object"&&match.tournament!==null?(match.tournament as Record<string,unknown>).year:null));
+    if(roundRank(candidateRound)>roundRank(result[key].best)||(roundRank(candidateRound)===roundRank(result[key].best)&&candidateYear!==null&&(result[key].bestYear??0)<candidateYear)){result[key].best=candidateRound;result[key].bestYear=candidateYear;}
   }
 
   return result;
@@ -464,6 +470,7 @@ export async function getEalaDashboard(): Promise<DashboardData> {
   return {
     lastUpdated: new Date().toISOString(),
     latestMatch,
+    recentSingles: recentSingles(singles),
     nextMatch:
       singlesResult.ok || doublesResult.ok
         ? nextMatch
