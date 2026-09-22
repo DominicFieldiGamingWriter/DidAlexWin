@@ -361,7 +361,7 @@ export default async function Home() {
               <h3>{slam}</h3>
               <div className="slam-list">
                 <div><span>Match record</span><strong>{record ? `${record.wins}W – ${record.losses}L` : "—"}</strong></div>
-                <div><span>Best result</span><strong>{record?.best ? `${roundText(record.best)}${record.bestYear ? ` · {record.bestYear}` : ""}` : "—"}</strong></div>
+                <div><span>Best result</span><strong>{record?.best ? `${roundText(record.best)}${record.bestYear ? ` · ${record.bestYear}` : ""}` : "—"}</strong></div>
               </div>
             </div>;
           })}
