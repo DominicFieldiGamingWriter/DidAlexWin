@@ -123,8 +123,10 @@ async function sync(){
     const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&matchStart(m)&&new Date(matchStart(m)).getUTCFullYear()===year);
     const cs=cy(singles),cd=cy(doubles);
     const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
-    const latestCandidate=cs.slice().sort((a,b)=>Date.parse(matchStart(b))-Date.parse(matchStart(a)) || roundRank(text(b.round_name))-roundRank(text(a.round_name)))[0];
-    if(latestCandidate) await refreshExactMatchStart(latestCandidate);
+    // Refresh exact timestamps for every current-year singles match. The WTA
+    // player-history feed uses tournament dates, while the tournament match
+    // feed contains the real scheduled timestamp.
+    for (const candidate of cs) await refreshExactMatchStart(candidate);
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
     const losses=(a:Row[])=>a.filter(m=>won(m)===false).length;
     const titles=(a:Row[])=>a.filter(m=>text(m.round_name)==="F"&&won(m)===true&&!/125/.test(tournamentName(m))).length;
