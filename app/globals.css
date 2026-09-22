@@ -840,3 +840,43 @@ footer {
 @media(max-width:500px){
   .match-summary{flex-wrap:wrap}.form-grid{grid-template-columns:repeat(5,minmax(145px,1fr));overflow-x:auto}.upcoming-meta{grid-template-columns:1fr 1fr}.match-played-date{font-size:11px}
 }
+
+
+/* Final presentation refinements */
+.form-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.form-match { min-height: 100px; align-items: flex-start; }
+.form-match-info { display: block; min-width: 0; }
+.form-match-info strong.form-first-name,
+.form-match-info strong.form-surname {
+  display: block;
+  overflow: hidden;
+  color: #111a29;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.form-match-info strong.form-surname { margin-top: 2px; }
+.form-match-info span {
+  display: block;
+  margin-top: 8px;
+  color: #7084a1;
+  font-size: 9px;
+  line-height: 1.35;
+}
+.upcoming-event {
+  margin-top: 10px;
+  color: #aab8cb;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.upcoming-substatus {
+  margin-top: 9px;
+  color: #aab8cb;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 820px) {
+  .form-grid { grid-template-columns: repeat(5, minmax(145px, 1fr)); }
+}

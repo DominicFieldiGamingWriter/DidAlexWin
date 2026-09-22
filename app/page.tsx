@@ -60,6 +60,15 @@ function formatDateRange(start: unknown, end: unknown) {
   })}`;
 }
 
+function nameLines(value: unknown) {
+  const name = typeof value === "string" && value.trim() ? value.trim() : "Opponent";
+  const parts = name.split(/\s+/);
+  return {
+    first: parts.shift() ?? name,
+    surname: parts.join(" "),
+  };
+}
+
 function latestOpponent(match: Record<string, unknown> | null) {
   if (!match) return "Opponent";
   const opponent = match.opponent;
@@ -198,47 +207,57 @@ export default async function Home() {
           <div className="match-main">
             <div className="match-context">
               <div className="section-label">TOURNAMENT</div>
-              <div className="match-title">${latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}</div>
+              <div className="match-title">{latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}</div>
               <div className="match-summary">
-                <span className={`match-outcome ${won ? "win" : "loss"}`}>${won ? "WIN" : "LOSS"}</span>
-                <span className="match-played-date">${latest?.MatchTimeStamp || latest?.matchDate ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate)}` : "Match date unavailable"}</span>
+                <span className={`match-outcome ${won ? "win" : "loss"}`}>{won ? "WIN" : "LOSS"}</span>
+                <span className="match-played-date">{latest?.MatchTimeStamp || latest?.matchDate ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate)}` : "Match date unavailable"}</span>
               </div>
-              <div className="match-date">${latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
+              <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
             </div>
-            <div className="tennis-mark" aria-hidden="true"></div>
           </div>
           <div className="scoreboard">
             <div className="scoreboard-head"><span></span><span>SET 1</span><span>SET 2</span><span>SET 3</span></div>
             <div className={`score-row ${won ? "score-row-winner" : ""}`}>
-              <div className="score-player"><strong>Alexandra Eala</strong>${won && latest && <span className="winner-tag">WINNER</span>}</div>
-              {[0,1,2].map((index)=><strong className="set-score" key={index}>${scores.eala[index] ?? "—"}</strong>)}
+              <div className="score-player"><strong>Alexandra Eala</strong>{won && latest && <span className="winner-tag">WINNER</span>}</div>
+              {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.eala[index] ?? "—"}</strong>)}
             </div>
             <div className={`score-row ${won ? "" : "score-row-winner"}`}>
-              <div className="score-player"><strong>${latestOpponent(latest)}</strong>${!won && latest && <span className="winner-tag">WINNER</span>}</div>
-              {[0,1,2].map((index)=><strong className="set-score" key={index}>${scores.opponent[index] ?? "—"}</strong>)}
+              <div className="score-player"><strong>{latestOpponent(latest)}</strong>{!won && latest && <span className="winner-tag">WINNER</span>}</div>
+              {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.opponent[index] ?? "—"}</strong>)}
             </div>
           </div>
           <div className="match-details">
-            <div><span>ROUND</span><strong>${latest ? roundText(latest.round_name) : "—"}</strong></div>
-            <div><span>SURFACE</span><strong>${latest?.Surface ? titleCase(latest.Surface) : "—"}</strong></div>
-            <div><span>VENUE</span><strong>${latest?.city ? titleCase(latest.city) : "—"}</strong></div>
+            <div><span>ROUND</span><strong>{latest ? roundText(latest.round_name) : "—"}</strong></div>
+            <div><span>SURFACE</span><strong>{latest?.Surface ? titleCase(latest.Surface) : "—"}</strong></div>
+            <div><span>VENUE</span><strong>{latest?.city ? titleCase(latest.city) : "—"}</strong></div>
           </div>
         </div>
         <div className="recent-form">
           <div className="recent-form-heading">
-            <div><span className="section-label">RECENT FORM</span><strong>Last 5 singles matches</strong></div>
+            <div>
+              <span className="section-label">RECENT FORM</span>
+              <strong>Last 5 singles matches</strong>
+            </div>
             <span className="recent-form-key">W = win · L = loss</span>
           </div>
           <div className="form-grid">
-            ${data.recentSingles.map((match)=>(
-              <div className={`form-match ${match.result === "W" ? "form-match-win" : "form-match-loss"}`} key={`${match.date}-${match.opponent}-${match.round}`}>
-                <span className="form-result">${match.result}</span>
-                <div className="form-match-info"><strong>${match.opponent}</strong><span>${formatTournament(match.tournament)} · ${match.date}</span></div>
-              </div>
-            ))}
+            {data.recentSingles.map((match) => {
+              const name = nameLines(match.opponent);
+              return (
+                <div className={`form-match ${match.result === "W" ? "form-match-win" : "form-match-loss"}`} key={`${match.date}-${match.opponent}-${match.round}`}>
+                  <span className="form-result">{match.result}</span>
+                  <div className="form-match-info">
+                    <strong className="form-first-name">{name.first}</strong>
+                    {name.surname && <strong className="form-surname">{name.surname}</strong>}
+                    <span>{formatTournament(match.tournament)} · {match.date}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
+>
       <section className="upcoming-section">
         <div className="section-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
@@ -246,17 +265,24 @@ export default async function Home() {
         <div className="upcoming-card">
           <div>
             <div className="section-label">NEXT MATCH</div>
-            <div className="upcoming-title">${data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}</div>
-            <div className="upcoming-date">
-              ${data.nextMatch
+            <div className="upcoming-date upcoming-event">
+              {data.nextMatch
                 ? `${formatTournament(data.nextMatch.tournament)} · ${roundText(data.nextMatch.round)}`
-                : "The next Alexandra Eala match will appear here automatically."}
+                : "Next tournament information unavailable"}
+            </div>
+            <div className="upcoming-title">
+              {data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}
+            </div>
+            <div className="upcoming-substatus">
+              {data.nextMatch?.opponent?.startsWith("Winner of ")
+                ? "Opponent to be confirmed"
+                : "Scheduled fixture"}
             </div>
           </div>
           <div className="upcoming-meta">
-            <div><span>DATE</span><strong>${data.nextMatch?.date ?? "—"}</strong></div>
-            <div><span>ROUND</span><strong>${data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>STATUS</span><strong>${data.nextMatch ? (data.nextMatch.date === "TBA" ? "Time TBA" : "Scheduled") : "—"}</strong></div>
+            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
+            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
+            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.date === "TBA" ? "Time TBA" : "Scheduled") : "—"}</strong></div>
           </div>
         </div>
       </section>
@@ -301,26 +327,25 @@ export default async function Home() {
         <div className="career-heading-row">
           <div>
             <h2 className="section-title">2026 SEASON RECORD</h2>
-            <p className="stats-subtitle">Singles and doubles matches played during the 2026 calendar year.</p>
           </div>
-          <span className="stats-updated">Last updated at ${formatDateTime(data.lastUpdated)}</span>
+          <span className="stats-updated">Last updated at {formatDateTime(data.lastUpdated)}</span>
         </div>
         <div className="stats-grid">
           <div className="stats-column"><h3>SINGLES</h3><div className="stats-list">
-            <div><span>Match record</span><strong>${data.singlesRecord.wins}W – ${data.singlesRecord.losses}L</strong></div>
-            <div><span>Matches played</span><strong>${data.singlesRecord.wins + data.singlesRecord.losses}</strong></div>
-            <div><span>Win rate</span><strong>${(data.singlesRecord.wins + data.singlesRecord.losses) ? ((data.singlesRecord.wins / (data.singlesRecord.wins + data.singlesRecord.losses)) * 100).toFixed(1) + "%" : "—"}</strong></div>
-            <div><span>Titles</span><strong>${data.singlesTitles}</strong></div>
-            <div className="stat-current"><span>Current ranking</span><strong>${data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
-            <div><span>Career high</span><strong>No. ${data.highestSinglesRank ?? "—"}</strong></div>
+            <div><span>Match record</span><strong>{data.singlesRecord.wins}W – {data.singlesRecord.losses}L</strong></div>
+            <div><span>Matches played</span><strong>{data.singlesRecord.wins + data.singlesRecord.losses}</strong></div>
+            <div><span>Win rate</span><strong>{(data.singlesRecord.wins + data.singlesRecord.losses) ? ((data.singlesRecord.wins / (data.singlesRecord.wins + data.singlesRecord.losses)) * 100).toFixed(1) + "%" : "—"}</strong></div>
+            <div><span>Titles</span><strong>{data.singlesTitles}</strong></div>
+            <div className="stat-current"><span>Current ranking</span><strong>{data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
+            <div><span>Career high</span><strong>No. {data.highestSinglesRank ?? "—"}</strong></div>
           </div></div>
           <div className="stats-column"><h3 className="doubles-heading">DOUBLES</h3><div className="stats-list">
-            <div><span>Match record</span><strong>${data.doublesRecord.wins}W – ${data.doublesRecord.losses}L</strong></div>
-            <div><span>Matches played</span><strong>${data.doublesRecord.wins + data.doublesRecord.losses}</strong></div>
-            <div><span>Win rate</span><strong>${(data.doublesRecord.wins + data.doublesRecord.losses) ? ((data.doublesRecord.wins / (data.doublesRecord.wins + data.doublesRecord.losses)) * 100).toFixed(1) + "%" : "—"}</strong></div>
-            <div><span>Titles</span><strong>${data.doublesTitles}</strong></div>
-            <div className="stat-current"><span>Current ranking</span><strong>${data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
-            <div><span>Career high</span><strong>No. ${data.highestDoublesRank ?? "—"}</strong></div>
+            <div><span>Match record</span><strong>{data.doublesRecord.wins}W – {data.doublesRecord.losses}L</strong></div>
+            <div><span>Matches played</span><strong>{data.doublesRecord.wins + data.doublesRecord.losses}</strong></div>
+            <div><span>Win rate</span><strong>{(data.doublesRecord.wins + data.doublesRecord.losses) ? ((data.doublesRecord.wins / (data.doublesRecord.wins + data.doublesRecord.losses)) * 100).toFixed(1) + "%" : "—"}</strong></div>
+            <div><span>Titles</span><strong>{data.doublesTitles}</strong></div>
+            <div className="stat-current"><span>Current ranking</span><strong>{data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
+            <div><span>Career high</span><strong>No. {data.highestDoublesRank ?? "—"}</strong></div>
           </div></div>
         </div>
       </section>
@@ -328,7 +353,6 @@ export default async function Home() {
       <section className="section-card grand-slam-card">
         <div className="grand-slam-heading">
           <h2 className="section-title">CAREER GRAND SLAM RECORD</h2>
-          <p className="stats-subtitle">Singles match records at each Grand Slam across her career.</p>
         </div>
         <div className="grand-slam-grid">
           {[["Australian Open","SINGLES"],["French Open","SINGLES"],["Wimbledon","SINGLES"],["US Open","SINGLES"]].map(([slam])=>{
@@ -336,8 +360,8 @@ export default async function Home() {
             return <div key={slam}>
               <h3>{slam}</h3>
               <div className="slam-list">
-                <div><span>Match record</span><strong>${record ? `${record.wins}W – ${record.losses}L` : "—"}</strong></div>
-                <div><span>Best result</span><strong>${record?.best ? `${roundText(record.best)}${record.bestYear ? ` · ${record.bestYear}` : ""}` : "—"}</strong></div>
+                <div><span>Match record</span><strong>{record ? `${record.wins}W – ${record.losses}L` : "—"}</strong></div>
+                <div><span>Best result</span><strong>{record?.best ? `${roundText(record.best)}${record.bestYear ? ` · {record.bestYear}` : ""}` : "—"}</strong></div>
               </div>
             </div>;
           })}
