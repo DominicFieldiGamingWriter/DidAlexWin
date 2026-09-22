@@ -363,8 +363,20 @@ body {
   margin-bottom: 24px;
 }
 
-.career-heading-row .section-title {
+.career-heading-row .section-title,
+.grand-slam-heading .section-title {
   margin: 0;
+}
+
+.stats-subtitle {
+  margin: 8px 0 0;
+  color: #aab8cb;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.section-card .stats-subtitle {
+  color: #7084a1;
 }
 
 .stats-updated {

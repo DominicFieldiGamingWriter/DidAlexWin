@@ -342,7 +342,10 @@ export default async function Home() {
 
       <section className="career-card">
         <div className="career-heading-row">
-          <h2 className="section-title">2026 RECORD</h2>
+          <div>
+            <h2 className="section-title">2026 SEASON RECORD</h2>
+            <p className="stats-subtitle">Singles and doubles matches played during the 2026 calendar year.</p>
+          </div>
           <span className="stats-updated">
             Last updated at {formatDateTime(data.lastUpdated)}
           </span>
@@ -352,7 +355,7 @@ export default async function Home() {
           <div className="stats-column">
             <h3>SINGLES</h3>
             <div className="stats-list">
-              <div><span>Record</span><strong>{data.singlesRecord.wins}–{data.singlesRecord.losses}</strong></div>
+              <div><span>Match record</span><strong>{data.singlesRecord.wins}W – {data.singlesRecord.losses}L</strong></div>
               <div><span>Titles</span><strong>{data.singlesTitles}</strong></div>
               <div><span>Highest ranking</span><strong>No. {data.highestSinglesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.singlesRank ? `No. ${data.singlesRank}` : "—"}</strong></div>
@@ -362,7 +365,7 @@ export default async function Home() {
           <div className="stats-column">
             <h3 className="doubles-heading">DOUBLES</h3>
             <div className="stats-list">
-              <div><span>Record</span><strong>{data.doublesRecord.wins}–{data.doublesRecord.losses}</strong></div>
+              <div><span>Match record</span><strong>{data.doublesRecord.wins}W – {data.doublesRecord.losses}L</strong></div>
               <div><span>Titles</span><strong>{data.doublesTitles}</strong></div>
               <div><span>Highest ranking</span><strong>No. {data.highestDoublesRank ?? "—"}</strong></div>
               <div><span>Current ranking</span><strong>{data.doublesRank ? `No. ${data.doublesRank}` : "—"}</strong></div>
@@ -372,7 +375,12 @@ export default async function Home() {
       </section>
 
       <section className="section-card grand-slam-card">
-        <h2 className="section-title">GRAND SLAM RECORD</h2>
+        <div className="grand-slam-heading">
+          <div>
+            <h2 className="section-title">CAREER GRAND SLAM RECORD</h2>
+            <p className="stats-subtitle">Singles match records at each Grand Slam across her career.</p>
+          </div>
+        </div>
 
         <div className="grand-slam-grid">
           {[["Australian Open", "SINGLES"], ["French Open", "SINGLES"], ["Wimbledon", "SINGLES"], ["US Open", "SINGLES"]].map(([slam]) => {
@@ -382,8 +390,8 @@ export default async function Home() {
                 <h3>{slam}</h3>
                 <div className="slam-list">
                   <div>
-                    <span>Record</span>
-                    <strong>{record ? `${record.wins}–${record.losses}` : "—"}</strong>
+                    <span>Match record</span>
+                    <strong>{record ? `${record.wins}W – ${record.losses}L` : "—"}</strong>
                   </div>
                   <div>
                     <span>Best result</span>
