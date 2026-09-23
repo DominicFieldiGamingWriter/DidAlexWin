@@ -94,7 +94,7 @@ function roundRank(round: string | null) {
   )[round ?? ""] ?? 0;
 }
 
-function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
+function exactMatchTimestamp(raw: WtaMatch | null | undefined): number {
   if (!raw || typeof raw !== "object") return NaN;
   for (const key of ["MatchTimeStamp", "scheduledTime", "scheduled_time", "matchDate", "match_date", "date"]) {
     const value = (raw as Record<string, unknown>)[key];
@@ -106,11 +106,18 @@ function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
   return NaN;
 }
 
+function storedMatchTimestamp(match: SupabaseMatch): number {
+  const raw = exactMatchTimestamp(match.raw_json);
+  if (!Number.isNaN(raw)) return raw;
+  const stored = Date.parse(match.match_start ?? "");
+  return Number.isNaN(stored) ? NaN : stored;
+}
+
 function matchDateValue(match: SupabaseMatch): number {
   if (match.match_date && /^\d{4}-\d{2}-\d{2}$/.test(match.match_date)) {
     return Date.parse(match.match_date + "T00:00:00Z");
   }
-  return exactMatchTimestamp(match.raw_json);
+  return storedMatchTimestamp(match);
 }
 
 function recentScore(raw: WtaMatch): string | null {
@@ -129,8 +136,8 @@ function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"]
   return [...matches]
     .filter((m) => Number(m.raw_json.winner) > 0)
     .sort((a, b) => {
-      const at = exactMatchTimestamp(a.raw_json);
-      const bt = exactMatchTimestamp(b.raw_json);
+      const at = storedMatchTimestamp(a);
+      const bt = storedMatchTimestamp(b);
       if (!Number.isNaN(at) && !Number.isNaN(bt) && at !== bt) return bt - at;
       const ad = matchDateValue(a);
       const bd = matchDateValue(b);
@@ -175,8 +182,8 @@ function grandSlamYears(matches: SupabaseMatch[],base: Record<string,{wins:numbe
 
 function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
   const sorted = [...matches].sort((a, b) => {
-    const at = exactMatchTimestamp(a.raw_json);
-    const bt = exactMatchTimestamp(b.raw_json);
+    const at = storedMatchTimestamp(a);
+    const bt = storedMatchTimestamp(b);
     if (!Number.isNaN(at) && !Number.isNaN(bt) && at !== bt) return bt - at;
     const ad = matchDateValue(a);
     const bd = matchDateValue(b);
