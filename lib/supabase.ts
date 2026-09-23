@@ -18,6 +18,16 @@ type SupabaseMatch = {
   raw_json: WtaMatch;
 };
 
+type SupabaseSeasonStats = {
+  season_year: number;
+  singles_wins: number | null;
+  singles_losses: number | null;
+  doubles_wins: number | null;
+  doubles_losses: number | null;
+  singles_titles: number | null;
+  doubles_titles: number | null;
+};
+
 type SupabaseStats = {
   updated_at: string | null;
   singles_wins: number | null;
@@ -156,12 +166,16 @@ function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
 
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
   try {
-    const [matches, statsRows, rankings, nextRows] = await Promise.all([
+    const seasonYear=2026;
+    const [matches, statsRows, seasonRows, rankings, nextRows] = await Promise.all([
       fetchTable<SupabaseMatch>(
         `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,round_name,eala_won,raw_json&limit=500`
       ),
       fetchTable<SupabaseStats>(
         `eala_stats?player_id=eq.${EALA_ID}&select=updated_at,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles&limit=1`
+      ),
+      fetchTable<SupabaseSeasonStats>(
+        `eala_season_stats?player_id=eq.${EALA_ID}&season_year=eq.${seasonYear}&select=season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles&limit=1`
       ),
       fetchTable<SupabaseRanking>(
         `eala_rankings?player_id=eq.${EALA_ID}&select=ranking_type,ranking&order=ranking_date.desc&limit=20`
@@ -173,6 +187,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
 
     const stats = statsRows[0];
     if (!stats) throw new Error("Eala stats are not populated");
+    const season = seasonRows[0] ?? null;
 
     const singlesRank =
       rankings.find((row) => row.ranking_type === "singles")?.ranking ?? null;
@@ -209,22 +224,22 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             tournamentEnd: next.tournament_end ?? "",
             timeKnown: Boolean(next.match_start),
             matchTime: next.match_start
-              ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Singapore" })
+              ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" })
               : null,
           }
         : null,
       singlesRank,
       doublesRank,
       singlesRecord: {
-        wins: stats.singles_wins ?? 0,
-        losses: stats.singles_losses ?? 0,
+        wins: season?.singles_wins ?? stats.singles_wins ?? 0,
+        losses: season?.singles_losses ?? stats.singles_losses ?? 0,
       },
       doublesRecord: {
-        wins: stats.doubles_wins ?? 0,
-        losses: stats.doubles_losses ?? 0,
+        wins: season?.doubles_wins ?? stats.doubles_wins ?? 0,
+        losses: season?.doubles_losses ?? stats.doubles_losses ?? 0,
       },
-      singlesTitles: stats.singles_titles ?? 0,
-      doublesTitles: stats.doubles_titles ?? 0,
+      singlesTitles: season?.singles_titles ?? stats.singles_titles ?? 0,
+      doublesTitles: season?.doubles_titles ?? stats.doubles_titles ?? 0,
       highestSinglesRank: stats.highest_singles_ranking ?? 18,
       highestDoublesRank: stats.highest_doubles_ranking ?? 88,
       grandSlams: grandSlamYears(matches, stats.grand_slam_singles ?? {}),
