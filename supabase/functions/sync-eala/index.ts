@@ -222,6 +222,9 @@ async function sync(){
             const matchPayload=await getTournamentJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
             successfulChecks++;
             const allMatches=records(matchPayload,"matches");
+            if(/SINGAPORE/i.test(t.title)){
+              await q("update public.eala_next_match set raw_json=raw_json || $1::jsonb, updated_at=now() where player_id=$2",[JSON.stringify({phase1_probe:{allMatches:allMatches.length,keys:Object.keys((matchPayload&&typeof matchPayload==="object"?matchPayload:{} ) as Row)}}),EALA_ID]);
+            }
             const ealaMatches=allMatches.filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID));
             const scheduledMatches=ealaMatches
               .filter(item=>{
