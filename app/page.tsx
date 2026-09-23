@@ -234,8 +234,13 @@ export default async function Home() {
         </div>
       </section>
       <section className="upcoming-section">
-        <div className="section-heading-row">
+        <div className="section-heading-row upcoming-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
+          <div className="upcoming-meta upcoming-meta-outside">
+            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
+            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
+            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.timeKnown ? "Scheduled" : "Time TBA") : "—"}</strong></div>
+          </div>
         </div>
         <div className="upcoming-card">
           <div>
@@ -253,11 +258,6 @@ export default async function Home() {
                 ? "Opponent to be confirmed"
                 : "Scheduled fixture"}
             </div>
-          </div>
-          <div className="upcoming-meta">
-            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
-            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.timeKnown ? "Scheduled" : "Time TBA") : "—"}</strong></div>
           </div>
         </div>
       </section>
