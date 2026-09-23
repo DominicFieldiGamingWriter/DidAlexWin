@@ -130,6 +130,7 @@ async function sync(){
     const p=profile&&typeof profile==="object"?profile as Row:{},po=p.player&&typeof p.player==="object"?p.player as Row:p;
     await q("insert into public.eala_player(player_id,name,slug,country,profile_json,updated_at) values($1,$2,$3,$4,$5::jsonb,now()) on conflict(player_id) do update set name=excluded.name,slug=excluded.slug,country=excluded.country,profile_json=excluded.profile_json,updated_at=now()",[EALA_ID,text(po.fullName)||text(po.name)||"Alexandra Eala",text(po.slug)||"alexandra-eala",text(po.country)||"PHI",JSON.stringify(p)]);
     const sc=await upsertMatches(singles,"singles"),dc=await upsertMatches(doubles,"doubles");
+    await q("delete from public.eala_rankings where player_id=$1 and raw_json->>'rankedAt' is not null and ranking_date <> (raw_json->>'rankedAt')::date",[EALA_ID]);
     let rc=0;
     for(const [item,kind] of [[sRank,"singles"],[dRank,"doubles"]] as const){
       const ranking=item.ranking;
@@ -238,6 +239,34 @@ async function sync(){
                   matchStart:valid?ts:null,
                   source:{source:"WTA tournament draw",draw_match_id:text(future.match.Id),draw_round_id:future.roundId,draw_size:drawSize}
                 };
+
+                try{
+                  const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
+                  const scheduled=records(matchPayload,"matches")
+                    .filter(item=>
+                      text(item.PlayerIDA)===String(EALA_ID) ||
+                      text(item.PlayerIDB)===String(EALA_ID)
+                    )
+                    .filter(item=>{
+                      const ts2=text(item.MatchTimeStamp);
+                      return ts2 && !Number.isNaN(Date.parse(ts2)) && Date.parse(ts2)>=Date.now()-3600000;
+                    })
+                    .sort((a,b)=>Date.parse(text(a.MatchTimeStamp))-Date.parse(text(b.MatchTimeStamp)))[0];
+
+                  if(scheduled){
+                    const scheduledTs=text(scheduled.MatchTimeStamp);
+                    const scheduledRound=roundNameFromTournamentRoundId(num(scheduled.RoundID),drawSize)||record.roundName;
+                    record={
+                      ...record,
+                      roundName:scheduledRound,
+                      matchDate:scheduledTs.slice(0,10),
+                      matchStart:scheduledTs,
+                      source:{...record.source,match_feed_id:text(scheduled.MatchID)||text(scheduled.Id)}
+                    };
+                  }
+                }catch(e){
+                  console.error("Tournament match-feed refresh failed; retaining draw details:",e);
+                }
               }
             }
           }catch(e){console.error("Draw refresh failed:",e);}
@@ -412,9 +441,11 @@ async function refreshExactMatchStart(candidate: Row) {
       .sort((a,b) => Date.parse(b.ts) - Date.parse(a.ts))[0];
     if (!exact) return;
     const merged = JSON.stringify({ MatchTimeStamp: exact.ts, Venue: exact.m.Venue ?? null });
-    await q("update public.eala_matches set match_start=$1, raw_json=raw_json || $2::jsonb, updated_at=now() where player_id=$3 and category='singles' and raw_json->>'tourn_year'=$4 and raw_json->>'round_name'=$5 and raw_json->>'player_1'=$6 and raw_json->>'player_2'=$7", [
-      exact.ts,merged,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2
+    await q("update public.eala_matches set match_date=$1::date, match_start=$2, raw_json=raw_json || $3::jsonb, updated_at=now() where player_id=$4 and category='singles' and raw_json->>'tourn_year'=$5 and raw_json->>'round_name'=$6 and raw_json->>'player_1'=$7 and raw_json->>'player_2'=$8", [
+      exact.ts.slice(0,10),exact.ts,merged,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2
     ]);
+
+    await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(seasonGrandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
   } catch {}
 }
 Deno.serve(async(req)=>{
