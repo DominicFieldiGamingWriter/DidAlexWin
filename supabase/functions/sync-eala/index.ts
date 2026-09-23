@@ -189,7 +189,7 @@ async function sync(){
 
     if(upcoming){
       const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId);
-      await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5::date,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_date=excluded.match_date,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.date,upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify(m)]);
+      await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5::date,$6,$7,$8,$9,$10,$11,$12::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_date=excluded.match_date,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.date,upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify(m)]);
     } else {
       try {
         const from=new Date(Date.now()-24*60*60*1000).toISOString().slice(0,10);
@@ -206,13 +206,7 @@ async function sync(){
           if(aa!==ba)return aa?-1:1;
           return Date.parse(a.start)-Date.parse(b.start);
         });
-        await q("update public.eala_sync_runs set error_message=$1 where id=$2",[JSON.stringify({
-          phase1_discovery_candidates:upcomingTournaments.length,
-          phase1_discovery_tournaments:upcomingTournaments.slice(0,20).map(x=>({id:x.groupId,year:x.year,title:x.title,start:x.start,end:x.end,draw:x.drawSize}))
-        }),runId]);
-
         let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,placeholderMatchPayload:unknown=null,successfulChecks=0;
-        const phase1Checks:Row[]=[];
         for(let batchStart=0;batchStart<upcomingTournaments.length;batchStart+=8){
           const batch=upcomingTournaments.slice(batchStart,batchStart+8);
           for(const t of batch){
@@ -222,9 +216,6 @@ async function sync(){
             const matchPayload=await getTournamentJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
             successfulChecks++;
             const allMatches=records(matchPayload,"matches");
-            if(/SINGAPORE/i.test(t.title)){
-              await q("update public.eala_next_match set raw_json=raw_json || $1::jsonb, updated_at=now() where player_id=$2",[JSON.stringify({phase1_probe:{allMatches:allMatches.length,keys:Object.keys((matchPayload&&typeof matchPayload==="object"?matchPayload:{} ) as Row)}}),EALA_ID]);
-            }
             const ealaMatches=allMatches.filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID));
             const scheduledMatches=ealaMatches
               .filter(item=>{
@@ -239,7 +230,6 @@ async function sync(){
                 const rb=num(b.RoundID)??999;
                 return ra-rb;
               });
-            if(phase1Checks.length<10||/SINGAPORE/i.test(t.title)) phase1Checks.push({id:t.groupId,year:t.year,title:t.title,allMatches:allMatches.length,ealaMatches:ealaMatches.length,scheduledMatches:scheduledMatches.length});
             if(scheduledMatches.length){
               placeholder=t as Row;
               placeholderMatchPayload=matchPayload;
@@ -268,7 +258,6 @@ async function sync(){
           if(placeholder)break;
         }
 
-        await q("update public.eala_sync_runs set error_message=error_message || $1 where id=$2",[JSON.stringify({phase1_checks:phase1Checks}),runId]);
         if(successfulChecks===0){
           console.error("Next-match discovery checks all failed; retaining existing record.");
         }else if(placeholder){
@@ -319,7 +308,7 @@ async function sync(){
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
               const drawSize=num(drawEvent.DrawSize)??placeholderDrawSize;
-              const future=drawEventMatches(drawEvent).filter(item=>drawMatchContainsEala(item.match)&&num(item.match.finished)!==1&&text(item.match.mState).toUpperCase()!=="F").sort((a,b)=>a.roundId-b.roundId)[0];
+              const future=drawEventMatches(drawEvent).filter(item=>drawMatchContainsEala(item.match)&&num(item.match.finished)!==1&&text(item.match.mState).toUpperCase()!=="F"&&text(item.match.MatchState).toUpperCase()!=="F"&&text(item.match.MatchState).toUpperCase()!=="FINISHED").sort((a,b)=>a.roundId-b.roundId)[0];
               if(future){
                 const ts=text(future.match.MatchTimeStamp),valid=ts&&!Number.isNaN(Date.parse(ts));
                 const drawOpponent=findDrawOpponent(drawEvent,future.match,future.roundId);
@@ -366,7 +355,7 @@ async function sync(){
               }
             }
           }catch(e){console.error("Draw refresh failed:",e);}
-          await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5::date,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_date=excluded.match_date,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,record.tournament,record.roundName,record.opponent,record.matchDate,record.matchStart,text(placeholder.surface)||"—","—",text(placeholder.start)||null,text(placeholder.end)||null,null,JSON.stringify(record.source)]);
+          await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5::date,$6,$7,$8,$9,$10,$11,$12::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_date=excluded.match_date,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,record.tournament,record.roundName,record.opponent,record.matchDate,record.matchStart,text(placeholder.surface)||"—","—",text(placeholder.start)||null,text(placeholder.end)||null,null,JSON.stringify(record.source)]);
         }else{
           await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
         }
@@ -379,7 +368,7 @@ async function sync(){
     }
 
     const nextMatchExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
-    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
+    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4,error_message=null where id=$5",[sc,dc,rc,nextMatchExists,runId]);
     return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:nextMatchExists};
   }catch(e){await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);throw e;}
 }
