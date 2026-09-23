@@ -36,9 +36,6 @@ export default function ShareWidget({
           <h2 className="share-widget-title" id="share-widget-title">
             Show your support for Alex - share this result
           </h2>
-          <p className="share-widget-copy">
-            Share the latest result on X or Facebook.
-          </p>
         </div>
         <div className="share-buttons">
           <a

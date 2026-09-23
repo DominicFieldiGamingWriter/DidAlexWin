@@ -1020,9 +1020,9 @@ footer {
 .share-widget-title {
   margin: 0;
   color: #111a29;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 900;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
 }
 
 .share-widget-copy {
