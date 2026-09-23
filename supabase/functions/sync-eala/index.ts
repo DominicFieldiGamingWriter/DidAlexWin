@@ -212,6 +212,7 @@ async function sync(){
         }),runId]);
 
         let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,placeholderMatchPayload:unknown=null,successfulChecks=0;
+        const phase1Checks:Row[]=[];
         for(let batchStart=0;batchStart<upcomingTournaments.length;batchStart+=8){
           const batch=upcomingTournaments.slice(batchStart,batchStart+8);
           for(const t of batch){
@@ -220,8 +221,9 @@ async function sync(){
           try{
             const matchPayload=await getTournamentJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
             successfulChecks++;
-            const scheduledMatches=records(matchPayload,"matches")
-              .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
+            const allMatches=records(matchPayload,"matches");
+            const ealaMatches=allMatches.filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID));
+            const scheduledMatches=ealaMatches
               .filter(item=>{
                 const ts=text(item.MatchTimeStamp);
                 const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="FINISHED";
@@ -234,6 +236,7 @@ async function sync(){
                 const rb=num(b.RoundID)??999;
                 return ra-rb;
               });
+            if(phase1Checks.length<10||/SINGAPORE/i.test(t.title)) phase1Checks.push({id:t.groupId,year:t.year,title:t.title,allMatches:allMatches.length,ealaMatches:ealaMatches.length,scheduledMatches:scheduledMatches.length});
             if(scheduledMatches.length){
               placeholder=t as Row;
               placeholderMatchPayload=matchPayload;
@@ -262,6 +265,7 @@ async function sync(){
           if(placeholder)break;
         }
 
+        await q("update public.eala_sync_runs set error_message=error_message || $1 where id=$2",[JSON.stringify({phase1_checks:phase1Checks}),runId]);
         if(successfulChecks===0){
           console.error("Next-match discovery checks all failed; retaining existing record.");
         }else if(placeholder){
