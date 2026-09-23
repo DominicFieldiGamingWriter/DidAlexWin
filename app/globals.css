@@ -880,3 +880,74 @@ footer {
 @media (max-width: 820px) {
   .form-grid { grid-template-columns: repeat(5, minmax(145px, 1fr)); }
 }
+
+
+/* Upcoming match: move date/round/status into the white heading area. */
+.upcoming-heading-row {
+  align-items: center;
+}
+
+.upcoming-heading-row .section-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.upcoming-meta-outside {
+  flex: 0 0 min(52%, 570px);
+  min-width: 430px;
+  margin-top: 0;
+}
+
+.upcoming-meta-outside > div {
+  min-height: 68px;
+  padding: 11px 14px;
+  background: #f3f6f8;
+  border: 1px solid #dfe4ea;
+  border-radius: 14px;
+}
+
+.upcoming-meta-outside span {
+  color: #7084a1;
+}
+
+.upcoming-meta-outside strong {
+  color: #111a29;
+  margin-top: 7px;
+  font-size: 15px;
+}
+
+.upcoming-card {
+  display: block;
+  padding: 25px 32px;
+}
+
+.upcoming-card .upcoming-title {
+  margin-top: 9px;
+}
+
+@media (max-width: 900px) {
+  .upcoming-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upcoming-meta-outside {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .upcoming-card {
+    padding: 24px 26px;
+  }
+}
+
+@media (max-width: 500px) {
+  .upcoming-meta-outside {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .upcoming-meta-outside > div:last-child {
+    grid-column: 1 / -1;
+  }
+}
