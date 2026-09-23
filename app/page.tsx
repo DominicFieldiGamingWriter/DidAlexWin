@@ -418,31 +418,42 @@ export default async function Home() {
           </div>
           <div className="bio-copy">
             <p>
-              Alexandra Eala is a professional tennis player from the
-              Philippines, born in Quezon City on 23 May 2005. She began making
-              history at junior level and became the first player from the
-              Philippines to win a junior Grand Slam singles title when she
-              captured the US Open girls' championship in 2022.
+              Alexandra Maniego Eala is a professional tennis player from the
+              Philippines, born in Quezon City, on 23 May 2005. She is left-handed
+              and stands 1.75m tall.
             </p>
             <p>
-              She is left-handed and stands 1.75m tall. Eala made her WTA Tour
-              debut in Miami qualifying in 2021 and trains at the Rafael Nadal
-              Academy in Mallorca. She has steadily moved from the junior ranks
-              into the professional tour, building her ranking through WTA and
-              ITF events.
+              Her parents are Michael Eala and Rosemarie “Rizza” Maniego-Eala, a
+              former SEA Games swimming medalist. They encouraged Alex to start
+              playing tennis aged four, and she quickly showed promise.
             </p>
             <p>
-              Her 2025 breakthrough included a semifinal run at the Miami Open,
-              where she recorded wins over Madison Keys and Iga Swiatek, her
-              first WTA final at Eastbourne and her first WTA 125 title at
-              Guadalajara. The Miami run also made her the first Filipina to
-              reach a WTA 1000 semifinal.
+              As a junior, Alex won girls’ doubles titles at the 2020 Australian
+              Open and 2021 French Open. She also made her WTA Tour debut in Miami
+              qualifying during 2021.
             </p>
             <p>
-              In 2026 she won the Washington DC WTA 500, reached the fourth
-              round at Wimbledon and reached the third round of the US Open.
-              Her results have continued to establish her as one of the leading
-              players from the Philippines on the WTA Tour.
+              It wouldn’t be too much longer before Eala tasted singles success,
+              making history in the process. In 2022, she became the first Filipino
+              player to win a junior Grand Slam singles title, capturing the US
+              Open girls' championship.
+            </p>
+            <p>
+              Her 2025 breakthrough included a semi-final run at the Miami Open,
+              where she recorded wins over Madison Keys and Iga Swiatek. The same
+              year, Alex made her first WTA final at Eastbourne, and her first WTA
+              125 title in Guadalajara. The Miami Open performance also made her
+              the first Filipina to reach a WTA 1000 semifinal.
+            </p>
+            <p>
+              In 2026, Alex Eala won the Washington DC WTA 500, reached the fourth
+              round of Wimbledon, and the third round of the US Open. Her results
+              and performances have continued to establish Alex as one of the
+              leading players on the WTA Tour.
+            </p>
+            <p>
+              No wonder she’s winning fans all over the world, not only in her
+              native Philippines.
             </p>
           </div>
         </div>
