@@ -178,7 +178,7 @@ async function sync(){
     const upcoming=singles
       .filter(m=>!completed(m)&&text(m.player_2)!=="BYE")
       .map(m=>({m,start:matchStart(m),date:matchDate(m)}))
-      .filter(x=>x.date&&Date.parse(x.date)>=Date.now()-3600000)
+      .filter(x=>x.start&&Date.parse(x.start)>=Date.now()-3600000)
       .sort((a,b)=>{
         const ad=a.start?Date.parse(a.start):Date.parse(a.date!);
         const bd=b.start?Date.parse(b.start):Date.parse(b.date!);
@@ -255,6 +255,7 @@ async function sync(){
         if(successfulChecks===0){
           console.error("Next-match discovery checks all failed; retaining existing record.");
         }else if(placeholder){
+          const placeholderDrawSize=num(placeholder.singlesDrawSize)??32;
           let record={tournament:text(placeholder.title)||"Upcoming tournament",roundName:"TBA",opponent:"TBA",matchDate:null as string|null,matchStart:null as string|null,source:{source:"WTA tournament entry",entry_confirmed:true}};
 
           if(placeholderMatchPayload){
@@ -285,7 +286,7 @@ async function sync(){
                 const ts=text(scheduled.MatchTimeStamp);
                 record={
                   tournament:text(placeholder.title)||"Upcoming tournament",
-                  roundName:"TBA",
+                  roundName:roundNameFromTournamentRoundId(num(scheduled.RoundID),placeholderDrawSize)||"TBA",
                   opponent:opponentName||"Opponent",
                   matchDate:ts.slice(0,10),
                   matchStart:ts,
@@ -300,7 +301,7 @@ async function sync(){
             const drawPayload=placeholderDrawPayload??await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
-              const drawSize=num(drawEvent.DrawSize)??32;
+              const drawSize=num(drawEvent.DrawSize)??placeholderDrawSize;
               const future=drawEventMatches(drawEvent).filter(item=>drawMatchContainsEala(item.match)&&num(item.match.finished)!==1&&text(item.match.mState).toUpperCase()!=="F").sort((a,b)=>a.roundId-b.roundId)[0];
               if(future){
                 const ts=text(future.match.MatchTimeStamp),valid=ts&&!Number.isNaN(Date.parse(ts));
@@ -376,6 +377,7 @@ function roundNameFromDrawId(roundId: number | null) {
 function roundNameFromTournamentRoundId(roundId: number | null, drawSize: number | null) {
   if (roundId === null || !drawSize || roundId < 1) return "";
   const roundsByDrawSize: Record<number, string[]> = {
+    28: ["R32", "R16", "Q", "S", "F"],
     32: ["R32", "R16", "Q", "S", "F"],
     64: ["R64", "R32", "R16", "Q", "S", "F"],
     96: ["R128", "R64", "R32", "R16", "Q", "S", "F"],
