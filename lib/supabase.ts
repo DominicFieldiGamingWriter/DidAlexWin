@@ -4,7 +4,7 @@ export type DashboardData = {
   lastUpdated: string | null;
   latestMatch: WtaMatch | null;
   recentSingles: Array<{ result: "W" | "L"; opponent: string; tournament: string; date: string; round: string; score: string | null }>;
-  nextMatch: { tournament: string; round: string; opponent: string; date: string; surface: string; venue: string; tournamentStart: string; tournamentEnd: string; timeKnown: boolean; matchTime: string | null } | null;
+  nextMatch: { tournament: string; round: string; opponent: string; date: string; surface: string; venue: string; tournamentStart: string; tournamentEnd: string; timeKnown: boolean; matchTime: string | null; matchTimePhilippines: string | null } | null;
   singlesRank: number | null;
   doublesRank: number | null;
   singlesRecord: { wins: number; losses: number };
