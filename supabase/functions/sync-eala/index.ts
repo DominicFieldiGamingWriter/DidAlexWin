@@ -307,7 +307,7 @@ async function sync(){
             const drawPayload=placeholderDrawPayload??await getTournamentJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
-              const drawSize=num(drawEvent.DrawSize)??placeholderDrawSize;
+              const drawSize=placeholderDrawSize;
               const future=drawEventMatches(drawEvent).filter(item=>drawMatchContainsEala(item.match)&&num(item.match.finished)!==1&&text(item.match.mState).toUpperCase()!=="F"&&text(item.match.MatchState).toUpperCase()!=="F"&&text(item.match.MatchState).toUpperCase()!=="FINISHED").sort((a,b)=>a.roundId-b.roundId)[0];
               if(future){
                 const ts=text(future.match.MatchTimeStamp),valid=ts&&!Number.isNaN(Date.parse(ts));
@@ -340,7 +340,7 @@ async function sync(){
 
                   if(scheduled){
                     const scheduledTs=text(scheduled.MatchTimeStamp);
-                    const scheduledRound=roundNameFromTournamentRoundId(num(scheduled.RoundID),drawSize)||record.roundName;
+                    const scheduledRound=roundNameFromTournamentRoundId(num(scheduled.RoundID),placeholderDrawSize)||record.roundName;
                     record={
                       ...record,
                       roundName:scheduledRound,
