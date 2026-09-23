@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { getEalaDashboardFromSupabase } from "../lib/supabase";
 import RefreshOnInterval from "./refresh";
+import ShareWidget from "./share-widget";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -173,6 +174,10 @@ export default async function Home() {
   const won = answer === "YES";
   const scores = scoreRows(latest);
   const tournament = latest?.tournament as Record<string, unknown> | undefined;
+  const shareScore = scores.eala
+    .map((value, index) => value && scores.opponent[index] ? value + "-" + scores.opponent[index] : null)
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
 
   return (
     <main className="page">
@@ -234,6 +239,14 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      <ShareWidget
+        result={answer}
+        tournament={latest?.TournamentName ? formatTournament(latest.TournamentName) : "the latest match"}
+        round={latest ? roundText(latest.round_name) : "the latest match"}
+        opponent={latestOpponent(latest)}
+        score={shareScore}
+        siteUrl={siteUrl}
+      />
       <section className="upcoming-section">
         <div className="section-heading-row upcoming-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
