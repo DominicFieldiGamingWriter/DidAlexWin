@@ -147,15 +147,15 @@ async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,s
         home_players jsonb,away_players jsonb,set_scores jsonb,duration_seconds integer,custom_id text,raw_json jsonb
       )
       on conflict(event_id) do update set
-        player_id=excluded.player_id,match_date=excluded.match_date,match_start=excluded.match_start,status=excluded.status,category=excluded.category,
+        player_id=excluded.player_id,match_date=coalesce(excluded.match_date,public.eala_matches.match_date),match_start=coalesce(excluded.match_start,public.eala_matches.match_start),status=excluded.status,category=excluded.category,
         tournament_name=excluded.tournament_name,tournament_slug=excluded.tournament_slug,tournament_id=excluded.tournament_id,
         season_name=excluded.season_name,season_id=excluded.season_id,round_name=excluded.round_name,round_number=excluded.round_number,
         surface=excluded.surface,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,
         home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,
         duration_seconds=excluded.duration_seconds,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()
       where public.eala_matches.player_id is distinct from excluded.player_id
-        or public.eala_matches.match_date is distinct from excluded.match_date
-        or public.eala_matches.match_start is distinct from excluded.match_start
+        or public.eala_matches.match_date is distinct from coalesce(excluded.match_date,public.eala_matches.match_date)
+        or public.eala_matches.match_start is distinct from coalesce(excluded.match_start,public.eala_matches.match_start)
         or public.eala_matches.status is distinct from excluded.status
         or public.eala_matches.category is distinct from excluded.category
         or public.eala_matches.tournament_name is distinct from excluded.tournament_name
