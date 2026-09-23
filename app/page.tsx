@@ -262,6 +262,7 @@ export default async function Home() {
         </div>
       </section>
 
+      <section className="recent-form-section">
         <div className="recent-form">
           <div className="recent-form-heading">
             <div>
@@ -286,7 +287,6 @@ export default async function Home() {
             })}
           </div>
         </div>
- 
       </section>
 
       <section className="section-card section-card--red">
