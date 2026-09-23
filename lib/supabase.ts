@@ -45,6 +45,7 @@ type SupabaseNextMatch = {
   venue: string | null;
   tournament_start: string | null;
   tournament_end: string | null;
+  raw_json: Record<string, unknown> | null;
 };
 
 async function fetchTable<T>(path: string): Promise<T[]> {
@@ -154,7 +155,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
         `eala_rankings?player_id=eq.${EALA_ID}&select=ranking_type,ranking&order=ranking_date.desc&limit=20`
       ),
       fetchTable<SupabaseNextMatch>(
-        `eala_next_match?player_id=eq.${EALA_ID}&select=tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end&limit=1`
+        `eala_next_match?player_id=eq.${EALA_ID}&select=tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,raw_json&limit=1`
       ),
     ]);
 
@@ -177,13 +178,19 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             tournament: next.tournament,
             round: next.round_name ?? "TBA",
             opponent: next.opponent ?? "TBA",
-            date: next.match_start
-              ? new Date(next.match_start).toLocaleDateString("en-GB", {
+            date: next.raw_json?.scheduled_date
+              ? new Date(String(next.raw_json.scheduled_date)).toLocaleDateString("en-GB", {
                   day: "numeric",
                   month: "short",
                   year: "numeric",
                 })
-              : "TBA",
+              : next.match_start
+                ? new Date(next.match_start).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "TBA",
             surface: next.surface ?? "—",
             venue: next.venue ?? "—",
             tournamentStart: next.tournament_start ?? "",
