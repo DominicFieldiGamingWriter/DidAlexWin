@@ -105,7 +105,7 @@ function toMatch(m:Row,category:string,exactMatchStart?:string){
     tournament_name:tournamentName(m),tournament_slug:text(m.tournamentSlug)||text(t.slug)||null,tournament_id:num(t.id)??num(m.tournamentId),
     season_name:text(m.seasonName)||text(m.year)||null,season_id:num(m.seasonId)??num(t.seasonId),round_name:text(m.round_name)||null,round_number:num(m.round_number),
     surface:text(m.Surface)||text(m.surface)||null,winner_side:w===1?"home":w===2?"away":"unknown",
-    eala_side=p1===String(EALA_ID)?"home":text(m.player_2)===String(EALA_ID)?"away":"unknown",eala_won:won(m),
+    eala_side:p1===String(EALA_ID)?"home":text(m.player_2)===String(EALA_ID)?"away":"unknown",eala_won:won(m),
     home_players:m.home_players??m.player_1,away_players:m.away_players??m.player_2,set_scores:m.scores??[],
     duration_seconds:num(m.durationSeconds)??num(m.duration_seconds),custom_id:text(m.customId)||null,raw_json:m};
 }
