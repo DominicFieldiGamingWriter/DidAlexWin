@@ -161,7 +161,8 @@ async function sync(){
       grandSlams[key]??={wins:0,losses:0,best:""};
       if(won(m)===true)grandSlams[key].wins++;
       if(won(m)===false)grandSlams[key].losses++;
-      if(roundRank(text(m.round_name))>roundRank(grandSlams[key].best))grandSlams[key].best=text(m.round_name);      if(seasonYear(m)===year){
+      if(roundRank(text(m.round_name))>roundRank(grandSlams[key].best))grandSlams[key].best=text(m.round_name);
+      if(seasonYear(m)===year){
         seasonGrandSlams[key]??={wins:0,losses:0,best:""};
         if(won(m)===true)seasonGrandSlams[key].wins++;
         if(won(m)===false)seasonGrandSlams[key].losses++;
@@ -199,8 +200,35 @@ async function sync(){
           return Date.parse(a.start)-Date.parse(b.start);
         });
 
-        let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,successfulChecks=0;
+        let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,placeholderMatchPayload:unknown=null,successfulChecks=0;
         for(const t of upcomingTournaments.slice(0,8)){
+          if(t.groupId===null||t.year===null)continue;
+
+          try{
+            const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
+            successfulChecks++;
+            const scheduledMatches=records(matchPayload,"matches")
+              .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
+              .filter(item=>{
+                const ts=text(item.MatchTimeStamp);
+                const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F";
+                return !finished && ((ts && !Number.isNaN(Date.parse(ts)) && Date.parse(ts)>=Date.now()-3600000) || !ts);
+              })
+              .sort((a,b)=>{
+                const ta=text(a.MatchTimeStamp),tb=text(b.MatchTimeStamp);
+                if(ta&&tb)return Date.parse(ta)-Date.parse(tb);
+                const ra=num(a.RoundID)??999;
+                const rb=num(b.RoundID)??999;
+                return ra-rb;
+              });
+            if(scheduledMatches.length){
+              placeholder=t as Row;
+              placeholderMatchPayload=matchPayload;
+              break;
+            }
+          }catch{}
+
+
           if(t.groupId===null||t.year===null)continue;
           try{
             const drawPayload=await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
@@ -223,6 +251,46 @@ async function sync(){
           console.error("Next-match discovery checks all failed; retaining existing record.");
         }else if(placeholder){
           let record={tournament:text(placeholder.title)||"Upcoming tournament",roundName:"TBA",opponent:"TBA",matchDate:null as string|null,matchStart:null as string|null,source:{source:"WTA tournament entry",entry_confirmed:true}};
+
+          if(placeholderMatchPayload){
+            try{
+              const scheduled=records(placeholderMatchPayload,"matches")
+                .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
+                .filter(item=>{
+                  const ts=text(item.MatchTimeStamp);
+                  const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F";
+                  return !finished && ts && !Number.isNaN(Date.parse(ts)) && Date.parse(ts)>=Date.now()-3600000;
+                })
+                .sort((a,b)=>Date.parse(text(a.MatchTimeStamp))-Date.parse(text(b.MatchTimeStamp)))[0];
+
+              if(scheduled){
+                const playerA=text(scheduled.PlayerIDA);
+                const playerB=text(scheduled.PlayerIDB);
+                const opponentId=playerA===String(EALA_ID)?playerB:playerA;
+                let opponentName="";
+                try{
+                  const opponentPayload=await getJson(WTA+"/players/"+opponentId);
+                  const opponentRecord=opponentPayload&&typeof opponentPayload==="object"
+                    ? ((opponentPayload as Row).player&&typeof (opponentPayload as Row).player==="object"
+                      ? (opponentPayload as Row).player as Row
+                      : opponentPayload as Row)
+                    : {};
+                  opponentName=text(opponentRecord.fullName)||text(opponentRecord.name);
+                }catch{}
+                const ts=text(scheduled.MatchTimeStamp);
+                record={
+                  tournament:text(placeholder.title)||"Upcoming tournament",
+                  roundName:"TBA",
+                  opponent:opponentName||"Opponent",
+                  matchDate:ts.slice(0,10),
+                  matchStart:ts,
+                  source:{source:"WTA tournament matches",match_id:text(scheduled.MatchID)||text(scheduled.Id),round_id:num(scheduled.RoundID)}
+                };
+              }
+            }catch(e){
+              console.error("Scheduled-match normalization failed:",e);
+            }
+          }
           try{
             const drawPayload=placeholderDrawPayload??await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
@@ -231,14 +299,19 @@ async function sync(){
               const future=drawEventMatches(drawEvent).filter(item=>drawMatchContainsEala(item.match)&&num(item.match.finished)!==1&&text(item.match.mState).toUpperCase()!=="F").sort((a,b)=>a.roundId-b.roundId)[0];
               if(future){
                 const ts=text(future.match.MatchTimeStamp),valid=ts&&!Number.isNaN(Date.parse(ts));
+                const drawOpponent=findDrawOpponent(drawEvent,future.match,future.roundId);
+                const drawRound=roundNameFromDrawId(future.roundId)||"TBA";
                 record={
-                  tournament:text(drawEvent.TournamentTitle)||text(placeholder.title)||"Upcoming tournament",
-                  roundName:roundNameFromDrawId(future.roundId)||"TBA",
-                  opponent:findDrawOpponent(drawEvent,future.match,future.roundId),
-                  matchDate:valid?ts.slice(0,10):null,
-                  matchStart:valid?ts:null,
-                  source:{source:"WTA tournament draw",draw_match_id:text(future.match.Id),draw_round_id:future.roundId,draw_size:drawSize}
+                  ...record,
+                  tournament:text(drawEvent.TournamentTitle)||record.tournament,
+                  roundName:drawRound==="TBA"?record.roundName:drawRound,
+                  opponent:record.opponent==="Opponent"||record.opponent==="TBA"?drawOpponent:record.opponent,
+                  source:{...record.source,draw_match_id:text(future.match.Id),draw_round_id:future.roundId,draw_size:drawSize}
                 };
+                if(!record.matchStart && valid){
+                  record.matchDate=ts.slice(0,10);
+                  record.matchStart=ts;
+                }
 
                 try{
                   const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
