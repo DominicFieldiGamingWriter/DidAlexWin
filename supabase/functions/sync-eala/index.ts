@@ -38,7 +38,7 @@ function exactMatchStart(m: Row) {
   }
   return "";
 }
-function knownMatchDate(m: Row, exactStart="") {
+function knownMatchDate(m: Row, exactStart: string | null = "") {
   for(const v of [m.matchDate,m.match_date,m.date]){
     const d=dateOnly(v); if(d)return d;
   }
@@ -293,7 +293,7 @@ async function sync(){
         }
 
         if (placeholder) {
-          let tournamentRecord = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null as string | null, source: {source:"WTA tournament entry",entry_confirmed:true} };
+          let tournamentRecord: { tournament:string; roundName:string; opponent:string; matchStart:string|null; source:Record<string,unknown> } = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null, source: {source:"WTA tournament entry",entry_confirmed:true} };
           try {
             const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent = drawEvents(drawPayload).find(event =>
@@ -343,6 +343,7 @@ async function sync(){
             ]);
           }
         }
+      }
     }
     const found=Boolean(upcoming);
     const placeholderExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
