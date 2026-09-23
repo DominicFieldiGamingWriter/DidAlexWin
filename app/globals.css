@@ -1468,3 +1468,38 @@ footer {
     font-size: 16px;
   }
 }
+
+
+/* Odds links: make headings and all four rows clickable without underlines. */
+.next-match-odds-card .odds-section-link {
+  display: inline-block;
+  color: #fcd116;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.next-match-odds-card .odds-section-link:hover,
+.next-match-odds-card .odds-section-link:focus-visible {
+  color: #fcd116;
+  text-decoration: none;
+}
+
+.next-match-odds-card .odds-row {
+  color: inherit;
+  text-decoration: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.next-match-odds-card .odds-row:hover,
+.next-match-odds-card .odds-row:focus-visible {
+  text-decoration: none;
+  border-color: #3b4d69;
+  background: #1d2b42;
+}
+
+.next-match-odds-card .odds-row:focus-visible,
+.next-match-odds-card .odds-section-link:focus-visible {
+  outline: 2px solid #fcd116;
+  outline-offset: 2px;
+}
