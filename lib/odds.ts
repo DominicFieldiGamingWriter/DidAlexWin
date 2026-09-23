@@ -245,3 +245,4 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
       betUrl,
     };
 }
+}
