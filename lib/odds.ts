@@ -1,10 +1,7 @@
-export type UpcomingOdds = {
-  matchWinner: {
-    eala: string;
-    opponent: string;
-    opponentName: string;
-  } | null;
-  tournamentOutright: string | null;
+export type MatchWinnerOdds = {
+  eala: string;
+  opponent: string;
+  opponentName: string;
 };
 
 type NextMatch = {
@@ -103,7 +100,7 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<UpcomingOdds | null> {
+export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<MatchWinnerOdds | null> {
   const apiKey = process.env.THE_ODDS_API_KEY;
   if (!apiKey || !nextMatch?.opponent || nextMatch.opponent === "TBA") return null;
 
@@ -177,41 +174,8 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
     }
   }
 
-  let tournamentOutright: string | null = null;
-  const outrightParams = new URLSearchParams({
-    apiKey,
-    regions,
-    markets: "outrights",
-    oddsFormat: "decimal",
-    dateFormat: "iso",
-  });
-  const outrightResponse = await getJson<OddsResponse[]>(
-    API_BASE + "/sports/" + tournamentKey + "/odds?" + outrightParams.toString()
-  );
 
-  if (outrightResponse?.length) {
-    let bestEala: number | null = null;
+  if (!matchWinner) return null;
 
-    for (const eventOdds of outrightResponse) {
-      for (const bookmaker of eventOdds.bookmakers ?? []) {
-        const market = bookmaker.markets?.find((item) => item.key === "outrights");
-        if (!market) continue;
-
-        for (const outcome of market.outcomes ?? []) {
-          if (isEala(outcome.name) && Number.isFinite(outcome.price)) {
-            bestEala = bestEala === null ? outcome.price : Math.max(bestEala, outcome.price);
-          }
-        }
-      }
-    }
-
-    if (bestEala !== null) tournamentOutright = bestEala.toFixed(2);
-  }
-
-  if (!matchWinner && !tournamentOutright) return null;
-
-  return {
-    matchWinner,
-    tournamentOutright,
-  };
+  return matchWinner;
 }
