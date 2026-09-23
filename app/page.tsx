@@ -118,24 +118,23 @@ function parseScores(value: unknown) {
 
 function scoreRows(match: Record<string, unknown> | null) {
   if (!match) return { eala: [], opponent: [] };
-
   const sets = parseScores(match.scores);
-  // The WTA feed's player_1/player_2 fields are the reliable ordering for
-  // scores. team_name_1/team_name_2 is not consistently aligned with them.
-  const ealaIsPlayer1 = String(match.player_1) === "330332";
-
+  const ealaWon = typeof match.eala_won === "boolean" ? match.eala_won : null;
+  const firstWins = sets.filter((set) => Number(set.first) > Number(set.second)).length;
+  const secondWins = sets.filter((set) => Number(set.second) > Number(set.first)).length;
+  const ealaIsFirst = ealaWon === true ? firstWins >= secondWins : ealaWon === false ? firstWins < secondWins : String(match.player_1) === "330332";
   return {
-    eala: sets.map((set) => (ealaIsPlayer1 ? set.first : set.second)),
-    opponent: sets.map((set) => (ealaIsPlayer1 ? set.second : set.first)),
+    eala: sets.map((set) => (ealaIsFirst ? set.first : set.second)),
+    opponent: sets.map((set) => (ealaIsFirst ? set.second : set.first)),
   };
 }
 
 function resultText(match: Record<string, unknown> | null) {
   if (!match) return "—";
+  if (typeof match.eala_won === "boolean") return match.eala_won ? "YES" : "NO";
   const winner = Number(match.winner);
   const ealaIs1 = String(match.player_1) === "330332";
-  const won = winner === (ealaIs1 ? 1 : 2);
-  return won ? "YES" : "NO";
+  return winner === (ealaIs1 ? 1 : 2) ? "YES" : "NO";
 }
 
 function roundText(round: unknown) {
@@ -212,7 +211,7 @@ export default async function Home() {
               <div className="match-title">{latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}</div>
               <div className="match-summary">
                 <span className={`match-outcome ${won ? "win" : "loss"}`}>{won ? "WIN" : "LOSS"}</span>
-                <span className="match-played-date">{latest?.MatchTimeStamp || latest?.matchDate ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate)}` : "Match date unavailable"}</span>
+                <span className="match-played-date">{latest?.MatchTimeStamp || latest?.matchDate || latest?.match_start ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate ?? latest.match_start)}` : "Match date unavailable"}</span>
               </div>
               <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
             </div>
