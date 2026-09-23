@@ -352,9 +352,9 @@ export default async function Home() {
               <div className="upcoming-odds">
                 <span>HANDICAP SPREAD ODDS</span>
                 <div className="upcoming-odds-values">
-                  <strong>Alex Eala - {odds.spread.eala} ({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint})</strong>
+                  <strong>Alex Eala ({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint}) - {odds.spread.eala}</strong>
                   <b>·</b>
-                  <strong>{odds.spread.opponentName} - {odds.spread.opponent} ({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint})</strong>
+                  <strong>{odds.spread.opponentName} ({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint}) - {odds.spread.opponent}</strong>
                 </div>
               </div>
             )}
