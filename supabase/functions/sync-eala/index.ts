@@ -73,7 +73,7 @@ function opponent(m: Row) {
   if(/\bEALA\b/i.test(t2) && t1)return t1;
   return text(m.player_1)===String(EALA_ID)?t2||"Opponent":t1||"Opponent";
 }
-function normalizeName(value: unknown) {
+function opponentId(m: Row) {  const o=m.opponent;  if(o&&typeof o==="object"){ const id=num((o as Row).id); if(id!==null)return String(id); }  return "";}function normalizeName(value: unknown) {
   return text(value).toUpperCase().replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim();
 }
 function candidateOpponentName(m: Row) {
@@ -147,15 +147,15 @@ async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,s
         home_players jsonb,away_players jsonb,set_scores jsonb,duration_seconds integer,custom_id text,raw_json jsonb
       )
       on conflict(event_id) do update set
-        player_id=excluded.player_id,match_date=excluded.match_date,match_start=excluded.match_start,status=excluded.status,category=excluded.category,
+        player_id=excluded.player_id,match_date=coalesce(excluded.match_date,public.eala_matches.match_date),match_start=coalesce(excluded.match_start,public.eala_matches.match_start),status=excluded.status,category=excluded.category,
         tournament_name=excluded.tournament_name,tournament_slug=excluded.tournament_slug,tournament_id=excluded.tournament_id,
         season_name=excluded.season_name,season_id=excluded.season_id,round_name=excluded.round_name,round_number=excluded.round_number,
         surface=excluded.surface,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,
         home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,
         duration_seconds=excluded.duration_seconds,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()
       where public.eala_matches.player_id is distinct from excluded.player_id
-        or public.eala_matches.match_date is distinct from excluded.match_date
-        or public.eala_matches.match_start is distinct from excluded.match_start
+        or public.eala_matches.match_date is distinct from coalesce(excluded.match_date,public.eala_matches.match_date)
+        or public.eala_matches.match_start is distinct from coalesce(excluded.match_start,public.eala_matches.match_start)
         or public.eala_matches.status is distinct from excluded.status
         or public.eala_matches.category is distinct from excluded.category
         or public.eala_matches.tournament_name is distinct from excluded.tournament_name
@@ -234,16 +234,20 @@ async function sync(){
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
     const losses=(a:Row[])=>a.filter(m=>won(m)===false).length;
     const titles=(a:Row[])=>a.filter(m=>text(m.round_name)==="F"&&won(m)===true&&!/125/.test(tournamentName(m))).length;
-    const grandSlams:Record<string,{wins:number,losses:number,best:string}>={};
+    const slamKeys:Record<string,string>={"AUSTRALIAN OPEN":"Australian Open","ROLAND GARROS":"French Open","FRENCH OPEN":"French Open","WIMBLEDON":"Wimbledon","US OPEN":"US Open"};
+    const grandSlams:Record<string,{wins:number,losses:number,best:string,bestYear:number|null}>={};
+    const bestRank:Record<string,number>={};
+    const stageRank=(m:Row)=>text(m.qpm_flag).toUpperCase()==="Q" ? (num(m.tourn_round)??0) : roundRank(text(m.round_name));
+    const bestLabel=(m:Row)=>text(m.qpm_flag).toUpperCase()==="Q" ? ("Q"+String(num(m.tourn_round)??"")) : (({R128:"1R",R64:"2R",R32:"3R",R16:"4R",Q:"QF",S:"SF",F:"F"} as Record<string,string>)[text(m.round_name)] ?? text(m.round_name));
     for(const m of singles){
       if(!completed(m))continue;
-      const name=tournamentName(m).toUpperCase();
-      const key=name.includes("AUSTRALIAN OPEN")?"Australian Open":name.includes("ROLAND GARROS")||name.includes("FRENCH OPEN")?"French Open":name.includes("WIMBLEDON")?"Wimbledon":name.includes("US OPEN")?"US Open":null;
+      const name=tournamentName(m).toUpperCase(),key=Object.entries(slamKeys).find(([needle])=>name.includes(needle))?.[1];
       if(!key)continue;
-      grandSlams[key]??={wins:0,losses:0,best:""};
-      if(won(m)===true)grandSlams[key].wins++;
-      if(won(m)===false)grandSlams[key].losses++;
-      if(roundRank(text(m.round_name))>roundRank(grandSlams[key].best))grandSlams[key].best=text(m.round_name);
+      grandSlams[key]??={wins:0,losses:0,best:"",bestYear:null};
+      if(text(m.qpm_flag).toUpperCase()!=="Q"){ if(won(m)===true)grandSlams[key].wins++; if(won(m)===false)grandSlams[key].losses++; }
+      const year=seasonYear(m);
+      const rank=stageRank(m),current=bestRank[key]??0,currentYear=grandSlams[key].bestYear;
+      if(rank>current || (rank===current && year!==null && (currentYear===null || Number(year)>Number(currentYear)))){ bestRank[key]=rank; grandSlams[key].best=bestLabel(m); grandSlams[key].bestYear=year===null?null:Number(year); }
     }
     await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
     await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
@@ -597,15 +601,13 @@ async function resolveExactMatchStarts(candidates:Row[]){
             .map(m=>({
               m,
               ts:text(m.MatchTimeStamp),
-              idMatch:(()=>{
-                const p1=stringValue(m.PlayerIDA),p2=stringValue(m.PlayerIDB);
-                return !!candidateP1&&!!candidateP2&&(p1===candidateP1||p1===candidateP2||p2===candidateP1||p2===candidateP2);
-              })(),
+              opponentIdMatch:!!candidateOpponentId && (stringValue(m.PlayerIDA)===candidateOpponentId || stringValue(m.PlayerIDB)===candidateOpponentId),
+              idMatch:!!candidateP1&&!!candidateP2&&[stringValue(m.PlayerIDA),stringValue(m.PlayerIDB)].some(id=>id===candidateP1||id===candidateP2),
               nameMatch:nameMatches(candidateOpponent,feedOpponentLastName(m))
             }))
             .filter(x=>x.ts&&!Number.isNaN(Date.parse(x.ts)))
-            .filter(x=>x.nameMatch||x.idMatch)
-            .sort((a,b)=>Number(b.nameMatch)-Number(a.nameMatch)||Number(b.idMatch)-Number(a.idMatch)||Date.parse(b.ts)-Date.parse(a.ts))[0];
+            .filter(x=>x.opponentIdMatch||x.nameMatch||x.idMatch)
+            .sort((a,b)=>Number(b.opponentIdMatch)-Number(a.opponentIdMatch)||Number(b.nameMatch)-Number(a.nameMatch)||Number(b.idMatch)-Number(a.idMatch)||Date.parse(b.ts)-Date.parse(a.ts))[0];
           if(exact)resolved.set(matchKey(candidate,"singles"),exact.ts);
         }
       }catch(error){
