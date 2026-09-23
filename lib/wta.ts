@@ -423,6 +423,7 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
               venue: stringValue(match.city) || "—",
               tournamentStart: dates.start || tournament.start,
               tournamentEnd: dates.end || tournament.end,
+              timeKnown: Boolean(exactDate),
             };
           }
 
@@ -435,6 +436,7 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
             venue: "—",
             tournamentStart: tournament.start,
             tournamentEnd: tournament.end,
+            timeKnown: false,
           };
         } catch {
           continue;
