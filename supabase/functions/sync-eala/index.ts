@@ -569,7 +569,7 @@ async function resolveExactMatchStarts(candidates:Row[]){
           const exact=matches
             .filter(m=>num(m.PlayerIDA)===EALA_ID||num(m.PlayerIDB)===EALA_ID)
             .map(m=>({m,ts:text(m.MatchTimeStamp),round:roundNameFromTournamentRoundId(num(m.RoundID),group.drawSize)||text(m.round_name)||text(m.roundName)}))
-            .filter(x=>x.ts&&!Number.isNaN(Date.parse(x.ts))&&x.round===candidateRound)
+            .filter(x=>x.ts&&!Number.isNaN(Date.parse(x.ts)))
             .filter(x=>{
               const p1=stringValue(x.m.PlayerIDA),p2=stringValue(x.m.PlayerIDB);
               return !candidateP1&&!candidateP2||p1===candidateP1||p1===candidateP2||p2===candidateP1||p2===candidateP2;
