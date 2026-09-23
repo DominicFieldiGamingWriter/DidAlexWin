@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { getEalaDashboardFromSupabase } from "../lib/supabase";
 import RefreshOnInterval from "./refresh";
@@ -5,6 +6,50 @@ import ShareWidget from "./share-widget";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
+  const data = await getEalaDashboardFromSupabase();
+  const latest = data.latestMatch;
+  const answer = resultText(latest);
+  const scores = scoreRows(latest);
+  const tournament = latest?.TournamentName
+    ? formatTournament(latest.TournamentName)
+    : "the latest match";
+  const opponent = latestOpponent(latest);
+  const round = latest ? roundText(latest.round_name) : "the latest match";
+  const score = scores.eala
+    .map((value, index) =>
+      value && scores.opponent[index] ? value + "-" + scores.opponent[index] : null
+    )
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+
+  const title =
+    answer === "YES"
+      ? "Alex Eala won! She beat " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round
+      : "Alex Eala loses to " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round;
+
+  return {
+    openGraph: {
+      type: "website",
+      url: siteUrl,
+      siteName: "Did Alex Win?",
+      title,
+      description:
+        "Did Alexandra Eala win her latest match? See her result, score, next match and more on DidAlexWin.",
+      images: [
+        {
+          url: "/alex-bio.webp",
+          width: 360,
+          height: 321,
+          alt: "Alexandra Eala",
+        },
+      ],
+    },
+  };
+}
 
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";
