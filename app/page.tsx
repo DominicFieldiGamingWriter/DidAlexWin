@@ -257,7 +257,7 @@ export default async function Home() {
           <div className="upcoming-meta">
             <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
             <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.date === "TBA" ? "Time TBA" : "Scheduled") : "—"}</strong></div>
+            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.date === "TBA" || data.nextMatch.raw_json?.scheduled_date ? "Time TBA" : "Scheduled") : "—"}</strong></div>
           </div>
         </div>
       </section>
