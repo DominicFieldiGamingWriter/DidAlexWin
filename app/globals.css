@@ -1282,3 +1282,85 @@ footer {
     text-align: left;
   }
 }
+
+
+/* Upcoming match: white card styled to match the latest-result card. */
+.upcoming-card {
+  display: block;
+  background: #ffffff;
+  color: #090d13;
+  border: 2px solid #fcd116;
+  border-radius: 28px;
+  padding: 28px 30px 24px;
+}
+
+.upcoming-card .upcoming-title {
+  margin-top: 0;
+  color: #111a29;
+}
+
+.upcoming-card .upcoming-event {
+  color: #7084a1;
+}
+
+.upcoming-card .upcoming-meta {
+  margin-top: 18px;
+}
+
+.upcoming-card .upcoming-meta > div {
+  background: #f3f6f8;
+  border: 0;
+}
+
+.upcoming-card .upcoming-meta span {
+  color: #7084a1;
+}
+
+.upcoming-card .upcoming-meta strong {
+  color: #111a29;
+}
+
+/* Odds: separate dark card below the upcoming-match card. */
+.next-match-odds-section {
+  margin-top: 30px;
+}
+
+.next-match-odds-card {
+  background: #111a29;
+  color: #ffffff;
+  border: 1px solid #ce1126;
+  border-radius: 28px;
+  padding: 28px 30px 24px;
+}
+
+.next-match-odds-card .upcoming-odds {
+  margin-top: 0;
+}
+
+.next-match-odds-card .upcoming-odds + .upcoming-odds {
+  margin-top: 15px;
+}
+
+.next-match-odds-card .upcoming-bet-line {
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .next-match-odds-section {
+    margin-top: 26px;
+  }
+
+  .next-match-odds-card {
+    padding: 24px 26px;
+  }
+}
+
+@media (max-width: 500px) {
+  .upcoming-card {
+    padding: 24px 26px;
+  }
+
+  .next-match-odds-card {
+    padding: 24px 22px;
+  }
+}

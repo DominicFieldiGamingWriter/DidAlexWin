@@ -328,7 +328,17 @@ export default async function Home() {
                 <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
               </div>
             </div>
-            {odds?.matchWinner && (
+          </div>
+        </div>
+      </section>
+
+      {(odds?.matchWinner || odds?.spread) && (
+        <section className="next-match-odds-section">
+          <div className="section-heading-row">
+            <h2 className="section-heading">NEXT MATCH ODDS</h2>
+          </div>
+          <div className="next-match-odds-card">
+            {odds.matchWinner && (
               <div className="upcoming-odds">
                 <span>MATCH WINNER ODDS</span>
                 <div className="upcoming-odds-values">
@@ -338,7 +348,7 @@ export default async function Home() {
                 </div>
               </div>
             )}
-            {odds?.spread && (
+            {odds.spread && (
               <div className="upcoming-odds">
                 <span>HANDICAP SPREAD ODDS</span>
                 <div className="upcoming-odds-values">
@@ -348,20 +358,13 @@ export default async function Home() {
                 </div>
               </div>
             )}
-            {(odds?.matchWinner || odds?.spread) && (
-              <div className="upcoming-bet-line">
-                {odds.betUrl ? (
-                  <a href={odds.betUrl} target="_blank" rel="noopener noreferrer">Click here to bet.</a>
-                ) : (
-                  <span>Click here to bet.</span>
-                )}
-                <span> Gamble responsibly. 21+</span>
-              </div>
-            )}
+            <div className="upcoming-bet-line">
+              <a href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">Click here to bet.</a>
+              <span> Odds can change. Gamble responsibly. 21+ only</span>
+            </div>
           </div>
-        </div>
-      </section>
-
+        </section>
+      )}
       <section className="recent-form-section">
         <div className="recent-form">
           <div className="recent-form-heading">
