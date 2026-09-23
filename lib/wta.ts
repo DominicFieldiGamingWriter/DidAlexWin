@@ -21,6 +21,7 @@ export type DashboardData = {
     tournamentStart: string;
     tournamentEnd: string;
     timeKnown: boolean;
+    matchTime: string | null;
   } | null;
   singlesRank: number | null;
   doublesRank: number | null;
