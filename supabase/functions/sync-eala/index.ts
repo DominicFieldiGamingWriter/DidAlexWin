@@ -231,6 +231,10 @@ async function sync(){
                 const matchPlayers = drawMatchPlayers(future.match);
                 const opponentName = findDrawOpponent(drawEvent, future.match, future.roundId);
                 const timeStamp = text(future.match.MatchTimeStamp);
+                const scheduledDate = future.roundId === 4 && num(future.match.dSeq) === 0
+                  && num(placeholder.groupId) === 1152 && num(placeholder.year) === 2026
+                  ? "2026-09-24"
+                  : null;
                 tournamentRecord = {
                   tournament: text(drawEvent.TournamentTitle) || text(placeholder.title) || "Upcoming tournament",
                   roundName,
@@ -240,7 +244,8 @@ async function sync(){
                     source:"WTA tournament draw",
                     draw_match_id:text(future.match.Id),
                     draw_round_id:future.roundId,
-                    draw_size:drawSize
+                    draw_size:drawSize,
+                    scheduled_date:scheduledDate
                   }
                 };
               }
