@@ -42,10 +42,8 @@ export async function generateMetadata(): Promise<Metadata> {
         "Did Alexandra Eala win her latest match? See her result, score, next match and more on DidAlexWin.",
       images: [
         {
-          url: "/alex-bio.webp",
-          width: 360,
-          height: 321,
-          alt: "Alexandra Eala",
+          url: answer === "YES" ? "/happy-alex.png" : answer === "NO" ? "/sad-alex.png" : "/alex-bio.webp",
+          alt: answer === "YES" ? "Happy Alexandra Eala caricature" : answer === "NO" ? "Sad Alexandra Eala caricature" : "Alexandra Eala",
         },
       ],
     },
