@@ -26,9 +26,25 @@ function records(payload: unknown, key = ""): Row[] {
   const v = key ? o[key] : o.content ?? o.matches ?? o.players ?? o.events;
   return Array.isArray(v) ? v.filter((x): x is Row => !!x && typeof x === "object") : [];
 }
-function exactDate(m: Row) {
-  for (const v of [m.matchDate,m.match_date,m.scheduledTime,m.scheduled_time,m.date]) {
-    const s = text(v); if (s && !Number.isNaN(Date.parse(s))) return s;
+function dateOnly(value: unknown) {
+  const s=text(value);
+  if(!s || Number.isNaN(Date.parse(s)))return "";
+  return new Date(s).toISOString().slice(0,10);
+}
+function exactMatchStart(m: Row) {
+  for(const v of [m.MatchTimeStamp,m.matchTimeStamp,m.scheduledTime,m.scheduled_time]){
+    const s=text(v);
+    if(s && /T\d{2}:\d{2}/.test(s) && !Number.isNaN(Date.parse(s)))return s;
+  }
+  return "";
+}
+function knownMatchDate(m: Row, exactStart="") {
+  for(const v of [m.matchDate,m.match_date,m.date]){
+    const d=dateOnly(v); if(d)return d;
+  }
+  if(exactStart)return dateOnly(exactStart);
+  for(const v of [m.MatchTimeStamp,m.matchTimeStamp,m.scheduledTime,m.scheduled_time]){
+    const d=dateOnly(v); if(d)return d;
   }
   return "";
 }
@@ -39,7 +55,13 @@ function stableEventId(m: Row, category: string) {
   return Math.abs(h>>>0);
 }
 function tournament(m: Row): Row { return m.tournament && typeof m.tournament === "object" ? m.tournament as Row : {}; }
-function matchStart(m: Row) { const exact=exactDate(m); if(exact)return exact; const t=tournament(m); return text(t.endDate)||text(m.StartDate)||""; }
+function matchStart(m: Row) { return exactMatchStart(m); }
+function seasonYear(m: Row) {
+  const t=tournament(m);
+  return num(m.tourn_year) ?? num(m.year) ?? num(t.year) ?? (() => {
+    const d=knownMatchDate(m); return d ? Number(d.slice(0,4)) : null;
+  })();
+}
 function tournamentName(m: Row) { const t=tournament(m); return text(m.TournamentName)||text(m.tournamentName)||text(t.name)||text(t.title)||"Unknown tournament"; }
 function completed(m: Row) { return text(m.scores).trim() !== "" && num(m.winner)!==null && text(m.player_2)!=="BYE"; }
 function won(m: Row): boolean|null { const w=num(m.winner); if(w===null)return null; if(w===1)return text(m.player_1)===String(EALA_ID); if(w===2)return text(m.player_2)===String(EALA_ID); return null; }
@@ -77,7 +99,9 @@ function matchKey(m: Row, category: string) {
 function toMatch(m:Row,category:string,exactMatchStart?:string){
   const id=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId)??stableEventId(m,category);
   const t=tournament(m), p1=text(m.player_1), w=num(m.winner);
-  return {event_id:id,player_id:EALA_ID,match_start:exactMatchStart||matchStart(m)||null,status:text(m.status)||(completed(m)?"completed":"scheduled"),category,
+  const start=exactMatchStart||matchStart(m)||null;
+  const matchDate=knownMatchDate(m,start);
+  return {event_id:id,player_id:EALA_ID,match_date:matchDate||null,match_start:start,status:text(m.status)||(completed(m)?"completed":"scheduled"),category,
     tournament_name:tournamentName(m),tournament_slug:text(m.tournamentSlug)||text(t.slug)||null,tournament_id:num(t.id)??num(m.tournamentId),
     season_name:text(m.seasonName)||text(m.year)||null,season_id:num(m.seasonId)??num(t.seasonId),round_name:text(m.round_name)||null,round_number:num(m.round_number),
     surface:text(m.Surface)||text(m.surface)||null,winner_side:w===1?"home":w===2?"away":"unknown",
@@ -90,21 +114,22 @@ async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,s
   for(let offset=0;offset<rows.length;offset+=MATCH_BATCH_SIZE){
     const batch=rows.slice(offset,offset+MATCH_BATCH_SIZE);
     const payload=JSON.stringify(batch);
-    await q(`insert into public.eala_matches(event_id,player_id,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,updated_at)
-      select event_id,player_id,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,now()
+    await q(`insert into public.eala_matches(event_id,player_id,match_date,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,updated_at)
+      select event_id,player_id,match_date,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,now()
       from jsonb_to_recordset($1::jsonb) as x(
-        event_id bigint,player_id bigint,match_start timestamptz,status text,category text,tournament_name text,tournament_slug text,tournament_id bigint,
+        event_id bigint,player_id bigint,match_date date,match_start timestamptz,status text,category text,tournament_name text,tournament_slug text,tournament_id bigint,
         season_name text,season_id bigint,round_name text,round_number integer,surface text,winner_side text,eala_side text,eala_won boolean,
         home_players jsonb,away_players jsonb,set_scores jsonb,duration_seconds integer,custom_id text,raw_json jsonb
       )
       on conflict(event_id) do update set
-        player_id=excluded.player_id,match_start=excluded.match_start,status=excluded.status,category=excluded.category,
+        player_id=excluded.player_id,match_date=excluded.match_date,match_start=excluded.match_start,status=excluded.status,category=excluded.category,
         tournament_name=excluded.tournament_name,tournament_slug=excluded.tournament_slug,tournament_id=excluded.tournament_id,
         season_name=excluded.season_name,season_id=excluded.season_id,round_name=excluded.round_name,round_number=excluded.round_number,
         surface=excluded.surface,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,
         home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,
         duration_seconds=excluded.duration_seconds,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()
       where public.eala_matches.player_id is distinct from excluded.player_id
+        or public.eala_matches.match_date is distinct from excluded.match_date
         or public.eala_matches.match_start is distinct from excluded.match_start
         or public.eala_matches.status is distinct from excluded.status
         or public.eala_matches.category is distinct from excluded.category
@@ -172,10 +197,12 @@ async function sync(){
     for(const [item,kind] of [[sRank,"singles"],[dRank,"doubles"]] as const){
       const ranking=item.ranking;
       if(ranking===null)continue;
-      await q("insert into public.eala_rankings(player_id,ranking_type,ranking,ranking_date,raw_json,updated_at) values($1,$2,$3,current_date,$4::jsonb,now()) on conflict(player_id,ranking_type,ranking_date) do update set ranking=excluded.ranking,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,kind,ranking,JSON.stringify(item.row)]);
+      const rankingDate=dateOnly(item.row?.rankedAt) || dateOnly(item.row?.rankingDate);
+      if(!rankingDate)continue;
+      await q("insert into public.eala_rankings(player_id,ranking_type,ranking,ranking_date,raw_json,updated_at) values($1,$2,$3,$4,$5::jsonb,now()) on conflict(player_id,ranking_type,ranking_date) do update set ranking=excluded.ranking,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,kind,ranking,rankingDate,JSON.stringify(item.row)]);
       rc++;
     }
-    const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&matchStart(m)&&new Date(matchStart(m)).getUTCFullYear()===year);
+    const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&seasonYear(m)===year);
     const cs=cy(singles),cd=cy(doubles);
     const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
@@ -192,9 +219,10 @@ async function sync(){
       if(won(m)===false)grandSlams[key].losses++;
       if(roundRank(text(m.round_name))>roundRank(grandSlams[key].best))grandSlams[key].best=text(m.round_name);
     }
-    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),highest_doubles_ranking=least(coalesce(public.eala_stats.highest_doubles_ranking,excluded.highest_doubles_ranking),excluded.highest_doubles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString()})]);
-    const upcoming=singles.filter(m=>!completed(m)&&text(m.player_2)!=="BYE").map(m=>({m,d:matchStart(m)})).filter(x=>x.d&&Date.parse(x.d)>=Date.now()-3600000).sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
-    if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.d,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify(m)]);}
+    await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
+    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
+    const upcoming=singles.filter(m=>!completed(m)&&text(m.player_2)!=="BYE").map(m=>({m,d:knownMatchDate(m),start:matchStart(m)})).filter(x=>x.d&&Date.parse(x.d+"T23:59:59Z")>=Date.now()-3600000).sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
+    if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify({...m,scheduled_date:upcoming.d||null})]);}
     else {
       try {
         const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -282,10 +310,7 @@ async function sync(){
                 const matchPlayers = drawMatchPlayers(future.match);
                 const opponentName = findDrawOpponent(drawEvent, future.match, future.roundId);
                 const timeStamp = text(future.match.MatchTimeStamp);
-                const scheduledDate = future.roundId === 4 && num(future.match.dSeq) === 0
-                  && num(placeholder.groupId) === 1152 && num(placeholder.year) === 2026
-                  ? "2026-09-24"
-                  : null;
+                const scheduledDate = timeStamp ? dateOnly(timeStamp) : "";
                 tournamentRecord = {
                   tournament: text(drawEvent.TournamentTitle) || text(placeholder.title) || "Upcoming tournament",
                   roundName,
@@ -296,7 +321,7 @@ async function sync(){
                     draw_match_id:text(future.match.Id),
                     draw_round_id:future.roundId,
                     draw_size:drawSize,
-                    scheduled_date:scheduledDate
+                    ...(scheduledDate ? {scheduled_date:scheduledDate} : {})
                   }
                 };
               }
@@ -315,12 +340,7 @@ async function sync(){
             null,
             JSON.stringify(tournamentRecord.source)
           ]);
-        } else {
-          await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
         }
-      } catch {
-        await q("delete from public.eala_next_match where player_id=$1",[EALA_ID]);
-      }
     }
     const found=Boolean(upcoming);
     const placeholderExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
@@ -503,7 +523,7 @@ async function resolveExactMatchStarts(candidates:Row[]){
   const resolved=new Map<string,string>();
   const groups=new Map<string,{groupId:number,year:number,drawSize:number|null,candidates:Row[]}>();
   for(const candidate of candidates){
-    if(exactDate(candidate))continue;
+    if(exactMatchStart(candidate))continue;
     const t=tournament(candidate);
     const group=t.tournamentGroup&&typeof t.tournamentGroup==="object"?t.tournamentGroup as Row:{};
     const groupId=num(group.id)??num(t.id)??num(candidate.tournamentId);
