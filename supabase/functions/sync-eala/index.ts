@@ -206,8 +206,10 @@ async function sync(){
         });
 
         let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,placeholderMatchPayload:unknown=null,successfulChecks=0;
-        for(const t of upcomingTournaments.slice(0,8)){
-          if(t.groupId===null||t.year===null)continue;
+        for(let batchStart=0;batchStart<upcomingTournaments.length;batchStart+=8){
+          const batch=upcomingTournaments.slice(batchStart,batchStart+8);
+          for(const t of batch){
+            if(t.groupId===null||t.year===null)continue;
 
           try{
             const matchPayload=await getTournamentJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
@@ -250,6 +252,8 @@ async function sync(){
             const players=records(payload,"players").length?records(payload,"players"):records(payload);
             if(players.some(playerIdsMatch)){placeholder=t as Row;break;}
           }catch{}
+          }
+          if(placeholder)break;
         }
 
         if(successfulChecks===0){
