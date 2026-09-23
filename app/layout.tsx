@@ -7,11 +7,11 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Did Alex Win? | Alexandra Eala Latest Result",
+    default: "Did Alex Eala Win? See the latest results for Alexandra Eala",
     template: "%s | Did Alex Win?",
   },
   description:
-    "Did Alexandra Eala win her latest match? Check her latest result, next match, current ranking, 2026 record and Grand Slam record.",
+    "Did Alexandra Eala win her latest match? See her results, scores and details about her next match. Learn more about the Filipino tennis star and her career.",
   alternates: {
     canonical: "/",
   },
