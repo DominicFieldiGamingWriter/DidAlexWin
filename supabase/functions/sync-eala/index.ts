@@ -372,6 +372,9 @@ async function sync(){
         }
       }catch(e){
         console.error("Next-match discovery failed; retaining existing record:",e);
+        try{
+          await q("update public.eala_sync_runs set error_message=coalesce(error_message,'') || $1 where id=$2",[JSON.stringify({next_match_discovery_error:e instanceof Error?e.message:String(e)}),runId]);
+        }catch{}
       }
     }
 
