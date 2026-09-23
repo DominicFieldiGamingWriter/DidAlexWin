@@ -65,7 +65,32 @@ function seasonYear(m: Row) {
 function tournamentName(m: Row) { const t=tournament(m); return text(m.TournamentName)||text(m.tournamentName)||text(t.name)||text(t.title)||"Unknown tournament"; }
 function completed(m: Row) { return text(m.scores).trim() !== "" && num(m.winner)!==null && text(m.player_2)!=="BYE"; }
 function won(m: Row): boolean|null { const w=num(m.winner); if(w===null)return null; if(w===1)return text(m.player_1)===String(EALA_ID); if(w===2)return text(m.player_2)===String(EALA_ID); return null; }
-function opponent(m: Row) { const o=m.opponent; if(o&&typeof o==="object") return text((o as Row).fullName)||text((o as Row).name)||"Opponent"; return text(m.player_1)===String(EALA_ID)?text(m.team_name_2)||"Opponent":text(m.team_name_1)||"Opponent"; }
+function opponent(m: Row) {
+  const o=m.opponent;
+  if(o&&typeof o==="object") return text((o as Row).fullName)||text((o as Row).name)||"Opponent";
+  const t1=text(m.team_name_1),t2=text(m.team_name_2);
+  if(/\bEALA\b/i.test(t1) && t2)return t2;
+  if(/\bEALA\b/i.test(t2) && t1)return t1;
+  return text(m.player_1)===String(EALA_ID)?t2||"Opponent":t1||"Opponent";
+}
+function normalizeName(value: unknown) {
+  return text(value).toUpperCase().replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim();
+}
+function candidateOpponentName(m: Row) {
+  const direct = opponent(m);
+  return direct && direct !== "Opponent" ? direct : "";
+}
+function feedOpponentLastName(m: Row) {
+  const aId=stringValue(m.PlayerIDA),bId=stringValue(m.PlayerIDB);
+  const aLast=text(m.PlayerNameLastA),bLast=text(m.PlayerNameLastB);
+  const ealaIsA=aId===String(EALA_ID)||/\bEALA\b/i.test(aLast);
+  return ealaIsA ? bLast : aLast;
+}
+function nameMatches(candidate: string, feedLast: string) {
+  const c=normalizeName(candidate),f=normalizeName(feedLast);
+  if(!c||!f)return false;
+  return c.split(" ").includes(f) || f.split(" ").includes(c);
+}
 async function getJson(url:string){ const r=await fetch(url,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(15000)}); if(!r.ok)throw new Error("WTA API returned "+r.status); return r.json(); }
 async function getRanking(type:string,metric:string){
   for(let page=0;page<10;page++){
@@ -565,16 +590,22 @@ async function resolveExactMatchStarts(candidates:Row[]){
         const payload=await dbHttpGetJson(WTA+"/tournaments/"+group.groupId+"/"+group.year+"/matches");
         const matches=records(payload,"matches");
         for(const candidate of group.candidates){
-          const candidateP1=stringValue(candidate.player_1),candidateP2=stringValue(candidate.player_2),candidateRound=text(candidate.round_name);
+          const candidateP1=stringValue(candidate.player_1),candidateP2=stringValue(candidate.player_2);
+          const candidateOpponent=candidateOpponentName(candidate);
           const exact=matches
             .filter(m=>num(m.PlayerIDA)===EALA_ID||num(m.PlayerIDB)===EALA_ID)
-            .map(m=>({m,ts:text(m.MatchTimeStamp),round:roundNameFromTournamentRoundId(num(m.RoundID),group.drawSize)||text(m.round_name)||text(m.roundName)}))
+            .map(m=>({
+              m,
+              ts:text(m.MatchTimeStamp),
+              idMatch:(()=>{
+                const p1=stringValue(m.PlayerIDA),p2=stringValue(m.PlayerIDB);
+                return !!candidateP1&&!!candidateP2&&(p1===candidateP1||p1===candidateP2||p2===candidateP1||p2===candidateP2);
+              })(),
+              nameMatch:nameMatches(candidateOpponent,feedOpponentLastName(m))
+            }))
             .filter(x=>x.ts&&!Number.isNaN(Date.parse(x.ts)))
-            .filter(x=>{
-              const p1=stringValue(x.m.PlayerIDA),p2=stringValue(x.m.PlayerIDB);
-              return !candidateP1&&!candidateP2||p1===candidateP1||p1===candidateP2||p2===candidateP1||p2===candidateP2;
-            })
-            .sort((a,b)=>Date.parse(b.ts)-Date.parse(a.ts))[0];
+            .filter(x=>x.nameMatch||x.idMatch)
+            .sort((a,b)=>Number(b.nameMatch)-Number(a.nameMatch)||Number(b.idMatch)-Number(a.idMatch)||Date.parse(b.ts)-Date.parse(a.ts))[0];
           if(exact)resolved.set(matchKey(candidate,"singles"),exact.ts);
         }
       }catch(error){

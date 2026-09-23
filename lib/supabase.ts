@@ -92,9 +92,9 @@ function roundRank(round: string | null) {
 
 function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
   if (!raw || typeof raw !== "object") return NaN;
-  for (const key of ["MatchTimeStamp", "matchDate", "match_date", "scheduledTime", "scheduled_time"]) {
+  for (const key of ["MatchTimeStamp", "scheduledTime", "scheduled_time"]) {
     const value = (raw as Record<string, unknown>)[key];
-    if (typeof value === "string" && value) {
+    if (typeof value === "string" && /T\d{2}:\d{2}/.test(value)) {
       const parsed = Date.parse(value);
       if (!Number.isNaN(parsed)) return parsed;
     }
@@ -102,15 +102,36 @@ function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
   return NaN;
 }
 
+function teamContainsEala(value: unknown) {
+  return typeof value === "string" && /\bEALA\b/i.test(value);
+}
+
+function ealaIsTeam1(raw: WtaMatch) {
+  if (teamContainsEala(raw.team_name_1)) return true;
+  if (teamContainsEala(raw.team_name_2)) return false;
+  return String(raw.player_1) === String(EALA_ID);
+}
+
+function opponentName(raw: WtaMatch) {
+  if (raw.opponent && typeof raw.opponent === "object") {
+    const name = (raw.opponent as Record<string, unknown>).fullName;
+    if (typeof name === "string" && name.trim()) return name.trim();
+  }
+  if (typeof raw.team_name_1 === "string" && typeof raw.team_name_2 === "string") {
+    return ealaIsTeam1(raw) ? raw.team_name_2 : raw.team_name_1;
+  }
+  return ealaIsTeam1(raw) ? String(raw.team_name_2 ?? "Opponent") : String(raw.team_name_1 ?? "Opponent");
+}
+
 function recentScore(raw: WtaMatch): string | null {
   const value = typeof raw.scores === "string" ? raw.scores.trim() : "";
   if (!value) return null;
-  const ealaIs1 = String(raw.player_1) === String(EALA_ID);
+  const team1IsEala = ealaIsTeam1(raw);
   return value.split(/\s+/).map((set) => {
     const parts = set.split("-");
     const first = parts[0] ?? "";
     const second = (parts[1] ?? "").replace(/\(.*/, "");
-    return ealaIs1 ? `${first}-${second}` : `${second}-${first}`;
+    return team1IsEala ? `${first}-${second}` : `${second}-${first}`;
   }).join(" ");
 }
 
@@ -121,9 +142,8 @@ function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"]
     return bd-ad;
   }).filter(m=>Number(m.raw_json.winner)>0).slice(0,5).map(m=>{
     const raw=m.raw_json,winner=Number(raw.winner),ealaIs1=String(raw.player_1)===String(EALA_ID);
-    const opponent=raw.opponent&&typeof raw.opponent==="object"?String((raw.opponent as Record<string,unknown>).fullName??"Opponent"):String(ealaIs1?raw.team_name_2??"Opponent":raw.team_name_1??"Opponent");
-    const rawDate=raw.MatchTimeStamp??raw.matchDate??m.match_start;
-    return {result:winner===(ealaIs1?1:2)?"W" as const:"L" as const,opponent,tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:recentScore(raw)};
+    const rawDate=raw.MatchTimeStamp??m.match_start;
+    return {result:winner===(ealaIs1?1:2)?"W" as const:"L" as const,opponent:opponentName(raw),tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:recentScore(raw)};
   });
 }
 
