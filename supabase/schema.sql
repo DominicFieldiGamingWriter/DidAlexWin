@@ -82,6 +82,24 @@ create table if not exists public.eala_stats (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.eala_season_stats (
+  player_id bigint not null references public.eala_player(player_id),
+  season_year integer not null check (season_year >= 1900 and season_year <= 2100),
+  singles_wins integer not null default 0,
+  singles_losses integer not null default 0,
+  doubles_wins integer not null default 0,
+  doubles_losses integer not null default 0,
+  singles_titles integer not null default 0,
+  doubles_titles integer not null default 0,
+  grand_slam_singles jsonb not null default '{}'::jsonb,
+  grand_slam_doubles jsonb not null default '{}'::jsonb,
+  raw_json jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (player_id, season_year)
+);
+
+create index if not exists idx_eala_season_stats_player_year on public.eala_season_stats (player_id, season_year desc);
+
 -- We use service-role access server-side only.
 -- Do not expose SUPABASE_SERVICE_ROLE_KEY to the browser.
 
@@ -98,7 +116,8 @@ create table if not exists public.eala_next_match (
   tournament_end timestamptz,
   source_event_id bigint references public.eala_matches(event_id),
   raw_json jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  match_date date
 );
 
 create table if not exists public.eala_sync_runs (
@@ -117,6 +136,7 @@ alter table public.eala_player enable row level security;
 alter table public.eala_matches enable row level security;
 alter table public.eala_rankings enable row level security;
 alter table public.eala_stats enable row level security;
+alter table public.eala_season_stats enable row level security;
 alter table public.eala_next_match enable row level security;
 alter table public.eala_sync_runs enable row level security;
 
@@ -136,6 +156,10 @@ drop policy if exists eala_stats_public_read on public.eala_stats;
 create policy eala_stats_public_read on public.eala_stats
   for select to anon, authenticated using (true);
 
+drop policy if exists eala_season_stats_public_read on public.eala_season_stats;
+create policy eala_season_stats_public_read on public.eala_season_stats
+  for select to anon, authenticated using (true);
+
 drop policy if exists eala_next_match_public_read on public.eala_next_match;
 create policy eala_next_match_public_read on public.eala_next_match
   for select to anon, authenticated using (true);
@@ -144,6 +168,7 @@ grant select on public.eala_player to anon, authenticated;
 grant select on public.eala_matches to anon, authenticated;
 grant select on public.eala_rankings to anon, authenticated;
 grant select on public.eala_stats to anon, authenticated;
+grant select on public.eala_season_stats to anon, authenticated;
 grant select on public.eala_next_match to anon, authenticated;
 
 -- WTA writes are performed by the private sync-eala Edge Function.
