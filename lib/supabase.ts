@@ -190,7 +190,12 @@ function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
     if (!Number.isNaN(ad) && !Number.isNaN(bd) && ad !== bd) return bd - ad;
     return roundRank(b.round_name) - roundRank(a.round_name);
   });
-  return sorted[0]?.raw_json ?? null;
+  const latest = sorted[0];
+  if (!latest) return null;
+  const raw = { ...latest.raw_json };
+  if (!raw.MatchTimeStamp && latest.match_start) raw.MatchTimeStamp = latest.match_start;
+  if (!raw.matchDate && latest.match_date) raw.matchDate = latest.match_date;
+  return raw;
 }
 
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
