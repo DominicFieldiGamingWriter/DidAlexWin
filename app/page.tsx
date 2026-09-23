@@ -331,9 +331,9 @@ export default async function Home() {
             {odds && (
               <div className="upcoming-odds">
                 <span>MATCH WINNER ODDS</span>
-                <strong>Alex Eala {odds.eala}</strong>
+                <strong>Alex Eala - {odds.eala}</strong>
                 <b>·</b>
-                <strong>{odds.opponentName} {odds.opponent}</strong>
+                <strong>{odds.opponentName} - {odds.opponent}</strong>
               </div>
             )}
           </div>
