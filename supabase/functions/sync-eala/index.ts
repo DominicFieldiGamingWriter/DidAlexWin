@@ -100,18 +100,6 @@ async function authorized(req: Request) {
   return token === String(rows[0]?.decrypted_secret ?? "");
 }
 
-async function dbHttpGetJson(url: string) {
-  const rows = await q("select status, content from extensions.http_get($1::varchar)", [url]);
-  const response = rows[0] as Row | undefined;
-  const status = num(response?.status);
-  if (status === null || status < 200 || status >= 300) {
-    throw new Error("WTA HTTP returned " + String(response?.status ?? "unknown"));
-  }
-  const raw = text(response?.content);
-  if (!raw) throw new Error("WTA HTTP returned empty content");
-  return JSON.parse(raw);
-}
-
 async function sync(){
   const recent=await q("select started_at from public.eala_sync_runs order by started_at desc limit 1");
   if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<30000)return {skipped:true};
@@ -206,7 +194,7 @@ async function sync(){
           if(t.groupId===null||t.year===null)continue;
 
           try{
-            const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
+            const matchPayload=await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
             successfulChecks++;
             const scheduledMatches=records(matchPayload,"matches")
               .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
@@ -232,7 +220,7 @@ async function sync(){
 
           if(t.groupId===null||t.year===null)continue;
           try{
-            const drawPayload=await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
+            const drawPayload=await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
             successfulChecks++;
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
@@ -293,7 +281,7 @@ async function sync(){
             }
           }
           try{
-            const drawPayload=placeholderDrawPayload??await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
+            const drawPayload=placeholderDrawPayload??await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
               const drawSize=num(drawEvent.DrawSize)??32;
@@ -315,7 +303,7 @@ async function sync(){
                 }
 
                 try{
-                  const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
+                  const matchPayload=await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
                   const scheduled=records(matchPayload,"matches")
                     .filter(item=>
                       text(item.PlayerIDA)===String(EALA_ID) ||
@@ -501,7 +489,7 @@ async function refreshExactMatchStart(candidate: Row) {
   const drawSize = num(t.singlesDrawSize);
   if (groupId === null || year === null) return;
   try {
-    const payload = await dbHttpGetJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
+    const payload = await getJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
     const matches = records(payload, "matches");
     const candidateP1 = text(candidate.player_1), candidateP2 = text(candidate.player_2), candidateRound = text(candidate.round_name);
     const exact = matches
