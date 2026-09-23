@@ -261,7 +261,7 @@ export default async function Home() {
             <div className="upcoming-time-box">
               <span>TIME</span>
               <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
-              <small>{data.nextMatch?.matchTimePhilippines ? `Philippines: ${data.nextMatch.matchTimePhilippines}` : "Philippines: TBA"}</small>
+              <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
             </div>
           </div>
         </div>

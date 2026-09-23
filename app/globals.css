@@ -991,11 +991,7 @@ footer {
 }
 
 
-.upcoming-time-box small {
+.upcoming-time-box strong + strong {
   display: block;
-  margin-top: 7px;
-  color: #aab8cb;
-  font-size: 11px;
-  line-height: 1.25;
-  font-weight: 700;
+  margin-top: 2px;
 }

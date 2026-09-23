@@ -276,7 +276,11 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
               ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" })
               : null,
             matchTimePhilippines: next.match_start
-              ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila", timeZoneName: "short" })
+              ? new Date(next.match_start)
+                  .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" })
+                  .replace(":00", "")
+                  .replace(" AM", "am")
+                  .replace(" PM", "pm") + " PHT"
               : null,
           }
         : null,
