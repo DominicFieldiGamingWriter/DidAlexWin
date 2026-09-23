@@ -163,8 +163,24 @@ async function sync(){
               surface: text(item.surface)
             };
           })
-          .filter(item => item.groupId !== null && item.year !== null && item.start && Date.parse(item.start) >= Date.now() - 36 * 60 * 60 * 1000)
-          .sort((a,b) => Date.parse(a.start)-Date.parse(b.start));
+          .filter(item => {
+            const now = Date.now();
+            const starts = Date.parse(item.start);
+            const ends = Date.parse(item.end);
+            if (item.groupId === null || item.year === null || !Number.isFinite(starts) || !Number.isFinite(ends)) return false;
+            // Include tournaments that are already in progress as well as
+            // tournaments starting in the next 60 days. The previous 36-hour
+            // start-date window incorrectly skipped Singapore after it had
+            // been underway for more than 36 hours.
+            return ends >= now - 6 * 60 * 60 * 1000 && starts <= now + 60 * 24 * 60 * 60 * 1000;
+          })
+          .sort((a,b) => {
+            const now = Date.now();
+            const aActive = Date.parse(a.start) <= now && Date.parse(a.end) >= now;
+            const bActive = Date.parse(b.start) <= now && Date.parse(b.end) >= now;
+            if (aActive !== bActive) return aActive ? -1 : 1;
+            return Date.parse(a.start)-Date.parse(b.start);
+          });
 
         let placeholder: Row | null = null;
         let placeholderDrawPayload: unknown = null;
