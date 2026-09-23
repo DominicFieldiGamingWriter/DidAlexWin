@@ -1,5 +1,4 @@
 import type { DashboardData, WtaMatch } from "./wta";
-import { getEalaDashboard as getWtaDashboard } from "./wta";
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ??
@@ -163,7 +162,7 @@ function grandSlamYears(matches: SupabaseMatch[],base: Record<string,{wins:numbe
 }
 
 function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
-  const sorted = [...matches].sort((a, b) => {
+  const sorted = [...matches].filter((match) => Number(match.raw_json.winner) > 0).sort((a, b) => {
     const exactDifference =
       exactMatchTimestamp(b.raw_json) - exactMatchTimestamp(a.raw_json);
 
@@ -266,6 +265,6 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
     };
   } catch (error) {
     console.error("Supabase dashboard read failed:", error);
-    return getWtaDashboard();
+    throw error;
   }
 }

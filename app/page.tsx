@@ -74,12 +74,13 @@ function latestOpponent(match: Record<string, unknown> | null) {
   const opponent = match.opponent;
   if (opponent && typeof opponent === "object") {
     const name = (opponent as Record<string, unknown>).fullName;
-    if (typeof name === "string" && name) return name;
+    if (typeof name === "string" && name.trim()) return name.trim();
   }
-  const ealaIs1 = String(match.player_1) === "330332";
-  return String(
-    ealaIs1 ? match.team_name_2 ?? "Opponent" : match.team_name_1 ?? "Opponent"
-  );
+  const team1 = String(match.team_name_1 ?? "");
+  const team2 = String(match.team_name_2 ?? "");
+  if (/\bEALA\b/i.test(team1) && team2) return team2.replace(/\s+/g, " ").trim();
+  if (/\bEALA\b/i.test(team2) && team1) return team1.replace(/\s+/g, " ").trim();
+  return "Opponent";
 }
 
 function titleCase(value: unknown) {
