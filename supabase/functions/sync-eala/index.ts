@@ -192,10 +192,10 @@ async function sync(){
       try {
         const from=new Date(Date.now()-24*60*60*1000).toISOString().slice(0,10);
         const to=new Date(Date.now()+60*24*60*60*1000).toISOString().slice(0,10);
-        const tournamentPayload=await getTournamentJson(WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to);
+        const tournamentPayload=await getTournamentJson(WTA+"/tournaments?page=0&pageSize=100");
         const upcomingTournaments=records(tournamentPayload).map(item=>{
           const group=item.tournamentGroup&&typeof item.tournamentGroup==="object"?item.tournamentGroup as Row:{};
-          return {groupId:num(group.id),year:num(item.year),start:text(item.startDate),end:text(item.endDate),title:text(item.title),surface:text(item.surface)};
+          return {groupId:num(group.id),year:num(item.year),start:text(item.startDate),end:text(item.endDate),title:text(item.title),surface:text(item.surface),drawSize:num(item.singlesDrawSize)};
         }).filter(item=>{
           const now=Date.now(),starts=Date.parse(item.start),ends=Date.parse(item.end);
           return item.groupId!==null&&item.year!==null&&Number.isFinite(starts)&&Number.isFinite(ends)&&ends>=now-6*60*60*1000&&starts<=now+60*24*60*60*1000;
@@ -259,7 +259,7 @@ async function sync(){
         if(successfulChecks===0){
           console.error("Next-match discovery checks all failed; retaining existing record.");
         }else if(placeholder){
-          const placeholderDrawSize=num(placeholder.singlesDrawSize)??32;
+          const placeholderDrawSize=num(placeholder.singlesDrawSize)??num(placeholder.drawSize)??32;
           let record={tournament:text(placeholder.title)||"Upcoming tournament",roundName:"TBA",opponent:"TBA",matchDate:null as string|null,matchStart:null as string|null,source:{source:"WTA tournament entry",entry_confirmed:true}};
 
           if(placeholderMatchPayload){
