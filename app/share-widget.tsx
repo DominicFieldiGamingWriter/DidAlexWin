@@ -34,7 +34,7 @@ export default function ShareWidget({
       <div className="share-widget">
         <div className="share-widget-header">
           <h2 className="share-widget-title" id="share-widget-title">
-            SHARE THIS RESULT
+            Show your support for Alex - share this result
           </h2>
           <p className="share-widget-copy">
             Share the latest result on X or Facebook.

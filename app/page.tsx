@@ -214,11 +214,11 @@ export default async function Home() {
             <div className="match-context">
               <div className="section-label">TOURNAMENT</div>
               <div className="match-title">{latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}</div>
+              <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
               <div className="match-summary">
                 <span className={`match-outcome ${won ? "win" : "loss"}`}>{won ? "WIN" : "LOSS"}</span>
                 <span className="match-played-date">{latest?.MatchTimeStamp || latest?.matchDate || latest?.match_start ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate ?? latest.match_start)}` : "Match date unavailable"}</span>
               </div>
-              <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
             </div>
             <div className="match-details match-details-top">
               <div><span>ROUND</span><strong>{latest ? roundText(latest.round_name) : "—"}</strong></div>
