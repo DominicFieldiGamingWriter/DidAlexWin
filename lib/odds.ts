@@ -244,5 +244,7 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
       spread,
       betUrl,
     };
-}
+  }
+
+  return null;
 }

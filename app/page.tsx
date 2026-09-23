@@ -307,7 +307,7 @@ export default async function Home() {
       />
       <section className="upcoming-section">
         <div className="section-heading-row upcoming-heading-row">
-          <h2 className="section-heading">Who does Alex play next?</h2>
+          <h2 className="section-heading">WHO DOES ALEX PLAY NEXT?</h2>
         </div>
         <div className="upcoming-card">
           <div className="upcoming-main">
