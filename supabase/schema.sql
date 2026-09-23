@@ -20,6 +20,7 @@ create table if not exists public.eala_player (
 create table if not exists public.eala_matches (
   event_id bigint primary key,
   player_id bigint not null references public.eala_player(player_id),
+  match_date date,
   match_start timestamptz,
   status text,
   category text not null check (category in ('singles', 'doubles', 'unknown')),
