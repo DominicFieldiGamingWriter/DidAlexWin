@@ -328,12 +328,18 @@ export default async function Home() {
                 <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
               </div>
             </div>
-            {odds && (
+            {odds?.matchWinner && (
               <div className="upcoming-odds">
                 <span>MATCH WINNER ODDS</span>
-                <strong>Alex Eala - {odds.eala}</strong>
+                <strong>Alex Eala - {odds.matchWinner.eala}</strong>
                 <b>·</b>
-                <strong>{odds.opponentName} - {odds.opponent}</strong>
+                <strong>{odds.matchWinner.opponentName} - {odds.matchWinner.opponent}</strong>
+              </div>
+            )}
+            {odds?.tournamentOutright && (
+              <div className="upcoming-odds upcoming-outright">
+                <span>TOURNAMENT OUTRIGHT ODDS</span>
+                <strong>Alex Eala - {odds.tournamentOutright}</strong>
               </div>
             )}
           </div>

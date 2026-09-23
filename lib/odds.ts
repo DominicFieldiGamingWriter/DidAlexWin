@@ -1,7 +1,10 @@
-export type MatchWinnerOdds = {
-  eala: string;
-  opponent: string;
-  opponentName: string;
+export type UpcomingOdds = {
+  matchWinner: {
+    eala: string;
+    opponent: string;
+    opponentName: string;
+  } | null;
+  tournamentOutright: string | null;
 };
 
 type NextMatch = {
@@ -34,10 +37,10 @@ type OddsBookmaker = {
 };
 
 type OddsResponse = {
-  id: string;
-  commence_time: string;
-  home_team: string;
-  away_team: string;
+  id?: string;
+  commence_time?: string;
+  home_team?: string;
+  away_team?: string;
   bookmakers?: OddsBookmaker[];
 };
 
@@ -100,7 +103,7 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<MatchWinnerOdds | null> {
+export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<UpcomingOdds | null> {
   const apiKey = process.env.THE_ODDS_API_KEY;
   if (!apiKey || !nextMatch?.opponent || nextMatch.opponent === "TBA") return null;
 
@@ -128,45 +131,87 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
     );
 
   const event = targetEvents[0];
-  if (!event?.id) return null;
+  const regions = process.env.THE_ODDS_API_REGIONS ?? DEFAULT_REGIONS;
 
-  const oddsParams = new URLSearchParams({
-    apiKey,
-    regions: process.env.THE_ODDS_API_REGIONS ?? DEFAULT_REGIONS,
-    markets: "h2h",
-    oddsFormat: "decimal",
-    dateFormat: "iso",
-  });
-  const oddsResponse = await getJson<OddsResponse>(
-    API_BASE + "/sports/" + tournamentKey + "/events/" + event.id + "/odds?" + oddsParams.toString()
-  );
-  if (!oddsResponse?.bookmakers?.length) return null;
+  let matchWinner: UpcomingOdds["matchWinner"] = null;
+  if (event?.id) {
+    const oddsParams = new URLSearchParams({
+      apiKey,
+      regions,
+      markets: "h2h",
+      oddsFormat: "decimal",
+      dateFormat: "iso",
+    });
+    const oddsResponse = await getJson<OddsResponse>(
+      API_BASE + "/sports/" + tournamentKey + "/events/" + event.id + "/odds?" + oddsParams.toString()
+    );
 
-  let bestEala: number | null = null;
-  let bestOpponent: number | null = null;
-  let resolvedOpponentName = nextMatch.opponent;
+    if (oddsResponse?.bookmakers?.length) {
+      let bestEala: number | null = null;
+      let bestOpponent: number | null = null;
+      let resolvedOpponentName = nextMatch.opponent;
 
-  for (const bookmaker of oddsResponse.bookmakers) {
-    const market = bookmaker.markets?.find((item) => item.key === "h2h");
-    if (!market) continue;
+      for (const bookmaker of oddsResponse.bookmakers) {
+        const market = bookmaker.markets?.find((item) => item.key === "h2h");
+        if (!market) continue;
 
-    for (const outcome of market.outcomes ?? []) {
-      if (!Number.isFinite(outcome.price)) continue;
+        for (const outcome of market.outcomes ?? []) {
+          if (!Number.isFinite(outcome.price)) continue;
 
-      if (isEala(outcome.name)) {
-        bestEala = bestEala === null ? outcome.price : Math.max(bestEala, outcome.price);
-      } else if (matchesOpponent(outcome.name, nextMatch.opponent)) {
-        bestOpponent = bestOpponent === null ? outcome.price : Math.max(bestOpponent, outcome.price);
-        resolvedOpponentName = outcome.name;
+          if (isEala(outcome.name)) {
+            bestEala = bestEala === null ? outcome.price : Math.max(bestEala, outcome.price);
+          } else if (matchesOpponent(outcome.name, nextMatch.opponent)) {
+            bestOpponent = bestOpponent === null ? outcome.price : Math.max(bestOpponent, outcome.price);
+            resolvedOpponentName = outcome.name;
+          }
+        }
+      }
+
+      if (bestEala !== null && bestOpponent !== null) {
+        matchWinner = {
+          eala: bestEala.toFixed(2),
+          opponent: bestOpponent.toFixed(2),
+          opponentName: resolvedOpponentName,
+        };
       }
     }
   }
 
-  if (bestEala === null || bestOpponent === null) return null;
+  let tournamentOutright: string | null = null;
+  const outrightParams = new URLSearchParams({
+    apiKey,
+    regions,
+    markets: "outrights",
+    oddsFormat: "decimal",
+    dateFormat: "iso",
+  });
+  const outrightResponse = await getJson<OddsResponse[]>(
+    API_BASE + "/sports/" + tournamentKey + "/odds?" + outrightParams.toString()
+  );
+
+  if (outrightResponse?.length) {
+    let bestEala: number | null = null;
+
+    for (const eventOdds of outrightResponse) {
+      for (const bookmaker of eventOdds.bookmakers ?? []) {
+        const market = bookmaker.markets?.find((item) => item.key === "outrights");
+        if (!market) continue;
+
+        for (const outcome of market.outcomes ?? []) {
+          if (isEala(outcome.name) && Number.isFinite(outcome.price)) {
+            bestEala = bestEala === null ? outcome.price : Math.max(bestEala, outcome.price);
+          }
+        }
+      }
+    }
+
+    if (bestEala !== null) tournamentOutright = bestEala.toFixed(2);
+  }
+
+  if (!matchWinner && !tournamentOutright) return null;
 
   return {
-    eala: bestEala.toFixed(2),
-    opponent: bestOpponent.toFixed(2),
-    opponentName: resolvedOpponentName,
+    matchWinner,
+    tournamentOutright,
   };
 }
