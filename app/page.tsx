@@ -47,6 +47,19 @@ export async function generateMetadata(): Promise<Metadata> {
         },
       ],
     },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description:
+        "Did Alexandra Eala win her latest match? See her result, score, next match and more on DidAlexWin.",
+      images: [
+        answer === "YES"
+          ? "/happy-alex.png"
+          : answer === "NO"
+            ? "/sad-alex.png"
+            : "/alex-bio.webp",
+      ],
+    },
   };
 }
 
