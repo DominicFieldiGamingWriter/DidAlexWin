@@ -258,7 +258,11 @@ export default async function Home() {
           <div className="upcoming-meta">
             <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
             <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>TIME</span><strong>{data.nextMatch?.matchTime ?? "TBA"}</strong></div>
+            <div className="upcoming-time-box">
+              <span>TIME</span>
+              <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
+              <small>{data.nextMatch?.matchTimePhilippines ? `Philippines: ${data.nextMatch.matchTimePhilippines}` : "Philippines: TBA"}</small>
+            </div>
           </div>
         </div>
       </section>

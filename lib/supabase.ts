@@ -275,6 +275,9 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             matchTime: next.match_start
               ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" })
               : null,
+            matchTimePhilippines: next.match_start
+              ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila", timeZoneName: "short" })
+              : null,
           }
         : null,
       singlesRank,
