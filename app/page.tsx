@@ -232,32 +232,7 @@ export default async function Home() {
             <div><span>VENUE</span><strong>{latest?.city ? titleCase(latest.city) : "—"}</strong></div>
           </div>
         </div>
-        <div className="recent-form">
-          <div className="recent-form-heading">
-            <div>
-              <span className="section-label">RECENT FORM</span>
-              <strong>Last 5 singles matches</strong>
-            </div>
-            <span className="recent-form-key">W = win · L = loss</span>
-          </div>
-          <div className="form-grid">
-            {data.recentSingles.map((match) => {
-              const name = nameLines(match.opponent);
-              return (
-                <div className={`form-match ${match.result === "W" ? "form-match-win" : "form-match-loss"}`} key={`${match.date}-${match.opponent}-${match.round}`}>
-                  <span className="form-result">{match.result}</span>
-                  <div className="form-match-info">
-                    <strong className="form-first-name">{name.first}</strong>
-                    {name.surname && <strong className="form-surname">{name.surname}</strong>}
-                    <span>{formatTournament(match.tournament)} · {match.date}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </section>
-
       <section className="upcoming-section">
         <div className="section-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
@@ -285,6 +260,33 @@ export default async function Home() {
             <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.date === "TBA" ? "Time TBA" : "Scheduled") : "—"}</strong></div>
           </div>
         </div>
+      </section>
+
+        <div className="recent-form">
+          <div className="recent-form-heading">
+            <div>
+              <span className="section-label">RECENT FORM</span>
+              <strong>Last 5 singles matches</strong>
+            </div>
+            <span className="recent-form-key">W = win · L = loss</span>
+          </div>
+          <div className="form-grid">
+            {data.recentSingles.map((match) => {
+              const name = nameLines(match.opponent);
+              return (
+                <div className={`form-match ${match.result === "W" ? "form-match-win" : "form-match-loss"}`} key={`${match.date}-${match.opponent}-${match.round}`}>
+                  <span className="form-result">{match.result}</span>
+                  <div className="form-match-info">
+                    <strong className="form-first-name">{name.first}</strong>
+                    {name.surname && <strong className="form-surname">{name.surname}</strong>}
+                    <span>{formatTournament(match.tournament)} · {match.date}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+ 
       </section>
 
       <section className="section-card section-card--red">
