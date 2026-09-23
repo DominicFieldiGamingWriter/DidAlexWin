@@ -19,7 +19,9 @@ function records(payload: unknown, key = ""): Row[] {
   if (Array.isArray(payload)) return payload.filter((v): v is Row => !!v && typeof v === "object");
   if (!payload || typeof payload !== "object") return [];
   const o = payload as Row;
-  const v = key ? o[key] : o.content ?? o.matches ?? o.players ?? o.events;
+  const v = key
+    ? o[key] ?? o.content ?? o.matches ?? o.players ?? o.events
+    : o.content ?? o.matches ?? o.players ?? o.events;
   return Array.isArray(v) ? v.filter((x): x is Row => !!x && typeof x === "object") : [];
 }
 function exactDate(m: Row) {
@@ -218,7 +220,7 @@ async function sync(){
               .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
               .filter(item=>{
                 const ts=text(item.MatchTimeStamp);
-                const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F";
+                const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="FINISHED";
                 return !finished && ((ts && !Number.isNaN(Date.parse(ts)) && Date.parse(ts)>=Date.now()-3600000) || !ts);
               })
               .sort((a,b)=>{
@@ -268,7 +270,7 @@ async function sync(){
                 .filter(item=>text(item.PlayerIDA)===String(EALA_ID)||text(item.PlayerIDB)===String(EALA_ID))
                 .filter(item=>{
                   const ts=text(item.MatchTimeStamp);
-                  const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F";
+                  const finished=num(item.finished)===1||text(item.mState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="F"||text(item.MatchState).toUpperCase()==="FINISHED";
                   return !finished && ts && !Number.isNaN(Date.parse(ts)) && Date.parse(ts)>=Date.now()-3600000;
                 })
                 .sort((a,b)=>Date.parse(text(a.MatchTimeStamp))-Date.parse(text(b.MatchTimeStamp)))[0];
