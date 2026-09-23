@@ -193,7 +193,7 @@ async function sync(){
         const from=new Date(Date.now()-24*60*60*1000).toISOString().slice(0,10);
         const to=new Date(Date.now()+60*24*60*60*1000).toISOString().slice(0,10);
         const tournamentPayload=await getTournamentJson(WTA+"/tournaments?page=0&pageSize=100");
-        const upcomingTournaments=records(tournamentPayload).map(item=>{
+        const upcomingTournaments=records(tournamentPayload,"tournaments").map(item=>{
           const group=item.tournamentGroup&&typeof item.tournamentGroup==="object"?item.tournamentGroup as Row:{};
           return {groupId:num(group.id),year:num(item.year),start:text(item.startDate),end:text(item.endDate),title:text(item.title),surface:text(item.surface),drawSize:num(item.singlesDrawSize)};
         }).filter(item=>{
