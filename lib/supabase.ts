@@ -1,4 +1,20 @@
-import type { DashboardData, WtaMatch } from "./wta";
+export type WtaMatch = Record<string, unknown>;
+
+export type DashboardData = {
+  lastUpdated: string | null;
+  latestMatch: WtaMatch | null;
+  recentSingles: Array<{ result: "W" | "L"; opponent: string; tournament: string; date: string; round: string; score: string | null }>;
+  nextMatch: { tournament: string; round: string; opponent: string; date: string; surface: string; venue: string; tournamentStart: string; tournamentEnd: string; timeKnown: boolean; matchTime: string | null } | null;
+  singlesRank: number | null;
+  doublesRank: number | null;
+  singlesRecord: { wins: number; losses: number };
+  doublesRecord: { wins: number; losses: number };
+  singlesTitles: number;
+  doublesTitles: number;
+  highestSinglesRank: number | null;
+  highestDoublesRank: number | null;
+  grandSlams: Record<string, { wins: number; losses: number; best: string; bestYear?: number | null }>;
+};
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ??
@@ -122,16 +138,18 @@ function opponentName(raw: WtaMatch) {
   return ealaIsTeam1(raw) ? String(raw.team_name_2 ?? "Opponent") : String(raw.team_name_1 ?? "Opponent");
 }
 
-function recentScore(raw: WtaMatch): string | null {
-  const value = typeof raw.scores === "string" ? raw.scores.trim() : "";
-  if (!value) return null;
-  const team1IsEala = ealaIsTeam1(raw);
-  return value.split(/\s+/).map((set) => {
+function orientedScore(value: unknown, ealaWon: boolean | null | undefined): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const sets = value.trim().split(/\s+/).map((set) => {
     const parts = set.split("-");
     const first = parts[0] ?? "";
     const second = (parts[1] ?? "").replace(/\(.*/, "");
-    return team1IsEala ? `${first}-${second}` : `${second}-${first}`;
-  }).join(" ");
+    return { first, second, firstNum: Number(first), secondNum: Number(second) };
+  });
+  const firstWins = sets.filter((set) => Number.isFinite(set.firstNum) && Number.isFinite(set.secondNum) && set.firstNum > set.secondNum).length;
+  const secondWins = sets.filter((set) => Number.isFinite(set.firstNum) && Number.isFinite(set.secondNum) && set.secondNum > set.firstNum).length;
+  const ealaIsFirst = ealaWon === true ? firstWins >= secondWins : ealaWon === false ? firstWins < secondWins : true;
+  return sets.map((set) => ealaIsFirst ? set.first + "-" + set.second : set.second + "-" + set.first).join(" ");
 }
 
 function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"] {
@@ -139,24 +157,39 @@ function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"]
     const at=exactMatchTimestamp(a.raw_json),bt=exactMatchTimestamp(b.raw_json);
     const ad=Number.isNaN(at)?Date.parse(a.match_start??""):at,bd=Number.isNaN(bt)?Date.parse(b.match_start??""):bt;
     return bd-ad;
-  }).filter(m=>Number(m.raw_json.winner)>0).slice(0,5).map(m=>{
-    const raw=m.raw_json,winner=Number(raw.winner),ealaIs1=String(raw.player_1)===String(EALA_ID);
-    const rawDate=raw.MatchTimeStamp??m.match_start;
-    return {result:winner===(ealaIs1?1:2)?"W" as const:"L" as const,opponent:opponentName(raw),tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:recentScore(raw)};
+  }).filter(m=>m.eala_won!==null && m.eala_won!==undefined).slice(0,5).map(m=>{
+    const raw=m.raw_json,rawDate=raw.MatchTimeStamp??m.match_start;
+    return {result:m.eala_won===true?"W" as const:"L" as const,opponent:opponentName(raw),tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:orientedScore(raw.scores,m.eala_won)};
   });
 }
 
-function grandSlamYears(matches: SupabaseMatch[],base: Record<string,{wins:number;losses:number;best:string;bestYear?:number|null}>){
-  const result=Object.fromEntries(Object.entries(base).map(([name,value])=>[name,{...value,bestYear:value.bestYear??null}])) as Record<string,{wins:number;losses:number;best:string;bestYear?:number|null}>;
-  const keys:Record<string,string>={"AUSTRALIAN OPEN":"Australian Open","ROLAND GARROS":"French Open","FRENCH OPEN":"French Open",WIMBLEDON:"Wimbledon","US OPEN":"US Open"};
+function grandSlamYears(matches: SupabaseMatch[]){
+  const result: Record<string,{wins:number;losses:number;best:string;bestYear?:number|null}> = {};
+  const bestRank: Record<string,number> = {};
+  const keys:Record<string,string>={"AUSTRALIAN OPEN":"Australian Open","ROLAND GARROS":"French Open","FRENCH OPEN":"French Open","WIMBLEDON":"Wimbledon","US OPEN":"US Open"};
+  const mainRoundRank:Record<string,number>={R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7};
+  const label=(raw:WtaMatch)=>{
+    if(String(raw.qpm_flag??"").toUpperCase()==="Q"){
+      const qRound=Number(raw.tourn_round);
+      return Number.isFinite(qRound) ? "Q"+String(qRound) : "Q";
+    }
+    return ({R128:"1R",R64:"2R",R32:"3R",R16:"4R",Q:"QF",S:"SF",F:"F"} as Record<string,string>)[String(raw.round_name??"")] ?? String(raw.round_name??"—");
+  };
+  const stageRank=(raw:WtaMatch)=>String(raw.qpm_flag??"").toUpperCase()==="Q" ? (Number(raw.tourn_round)||0) : (mainRoundRank[String(raw.round_name??"")]??0);
   for(const match of matches){
     const raw=match.raw_json,name=String(raw.TournamentName??"").toUpperCase();
     const key=Object.entries(keys).find(([needle])=>name.includes(needle))?.[1];
     if(!key)continue;
+    result[key]??={wins:0,losses:0,best:"",bestYear:null};
+    const qualifying=String(raw.qpm_flag??"").toUpperCase()==="Q";
+    if(!qualifying){ if(match.eala_won===true)result[key].wins++; if(match.eala_won===false)result[key].losses++; }
     const year=Number(raw.tourn_year??(raw.tournament&&typeof raw.tournament==="object"?(raw.tournament as Record<string,unknown>).year:null));
     if(!Number.isFinite(year))continue;
-    const rank=roundRank(match.round_name),current=roundRank(result[key]?.best??""),currentYear=result[key]?.bestYear??null;
-    if(rank>current||(rank===current&&(currentYear===null||year>currentYear)))result[key]={...(result[key]??{wins:0,losses:0,best:""}),best:match.round_name??"",bestYear:year};
+    const rank=stageRank(raw),current=bestRank[key]??0,currentYear=result[key].bestYear??null;
+    if(rank>current || (rank===current && (currentYear===null || year>currentYear))){
+      bestRank[key]=rank;
+      result[key]={...result[key],best:label(raw),bestYear:year};
+    }
   }
   return result;
 }
@@ -180,7 +213,7 @@ function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
     return roundRank(b.round_name) - roundRank(a.round_name);
   });
 
-  return sorted[0]?.raw_json ?? null;
+  return sorted[0] ? { ...sorted[0].raw_json, eala_won: sorted[0].eala_won, match_start: sorted[0].match_start } : null;
 }
 
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
@@ -261,7 +294,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       doublesTitles: season?.doubles_titles ?? stats.doubles_titles ?? 0,
       highestSinglesRank: stats.highest_singles_ranking ?? 18,
       highestDoublesRank: stats.highest_doubles_ranking ?? 88,
-      grandSlams: grandSlamYears(matches, stats.grand_slam_singles ?? {}),
+      grandSlams: grandSlamYears(matches),
     };
   } catch (error) {
     console.error("Supabase dashboard read failed:", error);
