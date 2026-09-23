@@ -36,55 +36,49 @@ create policy eala_season_stats_public_read on public.eala_season_stats
 grant select on public.eala_season_stats to anon, authenticated;
 
 -- Populate dates only from WTA match/date fields.
--- Do not reuse the previous tournament start/end fallback as a match timestamp.
+-- Do not reuse tournament start/end dates as a match timestamp.
 update public.eala_matches
-set match_date = case
-  when raw_json->>'MatchTimeStamp' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'MatchTimeStamp')::timestamptz::date
-  when raw_json->>'scheduledTime' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'scheduledTime')::timestamptz::date
-  when raw_json->>'scheduled_time' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'scheduled_time')::timestamptz::date
-  when raw_json->>'matchDate' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'matchDate')::timestamptz::date
-  when raw_json->>'matchDate' ~ '^\\d{4}-\\d{2}-\\d{2}$'
-    then (raw_json->>'matchDate')::date
-  when raw_json->>'match_date' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'match_date')::timestamptz::date
-  when raw_json->>'match_date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
-    then (raw_json->>'match_date')::date
-  when raw_json->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-    then (raw_json->>'date')::timestamptz::date
-  when raw_json->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
-    then (raw_json->>'date')::date
-  else null
-end;
-
-update public.eala_matches
-set match_start = case
-  when raw_json->>'MatchTimeStamp' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'MatchTimeStamp')::timestamptz
-  when raw_json->>'scheduledTime' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'scheduledTime')::timestamptz
-  when raw_json->>'scheduled_time' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'scheduled_time')::timestamptz
-  when raw_json->>'matchDate' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'matchDate')::timestamptz
-  when raw_json->>'match_date' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'match_date')::timestamptz
-  when raw_json->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:'
-    then (raw_json->>'date')::timestamptz
-  else null
-end;
+set
+  match_date = case
+    when nullif(raw_json->>'MatchTimeStamp','') is not null
+      then left(raw_json->>'MatchTimeStamp',10)::date
+    when nullif(raw_json->>'scheduledTime','') is not null
+      then left(raw_json->>'scheduledTime',10)::date
+    when nullif(raw_json->>'scheduled_time','') is not null
+      then left(raw_json->>'scheduled_time',10)::date
+    when nullif(raw_json->>'matchDate','') is not null
+      then left(raw_json->>'matchDate',10)::date
+    when nullif(raw_json->>'match_date','') is not null
+      then left(raw_json->>'match_date',10)::date
+    when nullif(raw_json->>'date','') is not null
+      then left(raw_json->>'date',10)::date
+    else null
+  end,
+  match_start = case
+    when position('T' in coalesce(raw_json->>'MatchTimeStamp','')) > 0
+      then (raw_json->>'MatchTimeStamp')::timestamptz
+    when position('T' in coalesce(raw_json->>'scheduledTime','')) > 0
+      then (raw_json->>'scheduledTime')::timestamptz
+    when position('T' in coalesce(raw_json->>'scheduled_time','')) > 0
+      then (raw_json->>'scheduled_time')::timestamptz
+    when position('T' in coalesce(raw_json->>'matchDate','')) > 0
+      then (raw_json->>'matchDate')::timestamptz
+    when position('T' in coalesce(raw_json->>'match_date','')) > 0
+      then (raw_json->>'match_date')::timestamptz
+    when position('T' in coalesce(raw_json->>'date','')) > 0
+      then (raw_json->>'date')::timestamptz
+    else null
+  end;
 
 update public.eala_next_match
-set match_date = case
-  when match_start is not null then match_start::date
-  when raw_json->>'scheduled_date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
-    then (raw_json->>'scheduled_date')::date
-  else null
-end,
-raw_json = raw_json - 'scheduled_date';
+set
+  match_date = case
+    when match_start is not null then left(match_start::text,10)::date
+    when nullif(raw_json->>'scheduled_date','') is not null
+      then left(raw_json->>'scheduled_date',10)::date
+    else null
+  end,
+  raw_json = raw_json - 'scheduled_date';
 
 insert into public.eala_season_stats (
   player_id, season_year, singles_wins, singles_losses, doubles_wins, doubles_losses,
