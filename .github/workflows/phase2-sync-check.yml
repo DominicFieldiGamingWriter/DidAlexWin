@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - phase2-sync-performance
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
