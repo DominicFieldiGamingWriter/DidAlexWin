@@ -80,6 +80,29 @@ set
   end,
   raw_json = raw_json - 'scheduled_date';
 
+-- Normalize historical ranking dates to the official WTA rankedAt date and
+-- remove daily duplicate snapshots created by the previous sync implementation.
+with ranked as (
+  select
+    id,
+    row_number() over (
+      partition by player_id, ranking_type, (raw_json->>'rankedAt')::date
+      order by updated_at desc, id desc
+    ) as rn
+  from public.eala_rankings
+  where player_id = 330332
+    and raw_json->>'rankedAt' is not null
+)
+delete from public.eala_rankings r
+using ranked d
+where r.id=d.id and d.rn>1;
+
+update public.eala_rankings
+set ranking_date=(raw_json->>'rankedAt')::date
+where player_id=330332
+  and raw_json->>'rankedAt' is not null;
+
+
 insert into public.eala_season_stats (
   player_id, season_year, singles_wins, singles_losses, doubles_wins, doubles_losses,
   singles_titles, doubles_titles, grand_slam_singles, grand_slam_doubles, raw_json, updated_at
