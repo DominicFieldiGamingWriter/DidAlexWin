@@ -195,6 +195,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             venue: next.venue ?? "—",
             tournamentStart: next.tournament_start ?? "",
             tournamentEnd: next.tournament_end ?? "",
+            timeKnown: Boolean(next.match_start),
           }
         : null,
       singlesRank,
