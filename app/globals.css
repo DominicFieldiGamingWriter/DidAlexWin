@@ -1087,3 +1087,43 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+ 
+/* Upcoming match winner odds */
+.upcoming-odds {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #aab8cb;
+}
+
+.upcoming-odds > span {
+  color: #fcd116;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.upcoming-odds strong {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.upcoming-odds b {
+  color: #7084a1;
+  font-size: 12px;
+}
+
+.upcoming-meta > div {
+  min-height: 82px;
+  padding: 12px 14px;
+}
+
+@media (max-width: 900px) {
+  .upcoming-odds {
+    margin-top: 9px;
+  }
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { getEalaDashboardFromSupabase } from "../lib/supabase";
+import { getUpcomingMatchWinnerOdds } from "../lib/odds";
 import RefreshOnInterval from "./refresh";
 import ShareWidget from "./share-widget";
 
@@ -11,6 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
   const data = await getEalaDashboardFromSupabase();
+  const odds = await getUpcomingMatchWinnerOdds(data.nextMatch);
   const latest = data.latestMatch;
   const answer = resultText(latest);
   const scores = scoreRows(latest);
@@ -307,6 +309,14 @@ export default async function Home() {
             <div className="upcoming-title">
               {data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}
             </div>
+            {odds && (
+              <div className="upcoming-odds">
+                <span>MATCH WINNER ODDS</span>
+                <strong>Alex Eala {odds.eala}</strong>
+                <b>·</b>
+                <strong>{odds.opponentName} {odds.opponent}</strong>
+              </div>
+            )}
             <div className="upcoming-substatus">
               {data.nextMatch?.opponent?.startsWith("Winner of ")
                 ? "Opponent to be confirmed"
