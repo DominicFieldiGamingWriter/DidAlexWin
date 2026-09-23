@@ -1,7 +1,17 @@
-export type MatchWinnerOdds = {
-  eala: string;
-  opponent: string;
-  opponentName: string;
+export type UpcomingOdds = {
+  matchWinner: {
+    eala: string;
+    opponent: string;
+    opponentName: string;
+  } | null;
+  spread: {
+    eala: string;
+    opponent: string;
+    opponentName: string;
+    ealaPoint: number;
+    opponentPoint: number;
+  } | null;
+  betUrl: string | null;
 };
 
 type NextMatch = {
@@ -20,16 +30,20 @@ type OddsEvent = {
 type OddsOutcome = {
   name: string;
   price: number;
+  point?: number;
+  link?: string | null;
 };
 
 type OddsMarket = {
   key: string;
+  link?: string | null;
   outcomes: OddsOutcome[];
 };
 
 type OddsBookmaker = {
   key: string;
   title: string;
+  link?: string | null;
   markets: OddsMarket[];
 };
 
@@ -38,6 +52,7 @@ type OddsResponse = {
   commence_time?: string;
   home_team?: string;
   away_team?: string;
+  link?: string | null;
   bookmakers?: OddsBookmaker[];
 };
 
@@ -100,7 +115,7 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<MatchWinnerOdds | null> {
+export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<UpcomingOdds | null> {
   const apiKey = process.env.THE_ODDS_API_KEY;
   if (!apiKey || !nextMatch?.opponent || nextMatch.opponent === "TBA") return null;
 
@@ -135,7 +150,8 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
     const oddsParams = new URLSearchParams({
       apiKey,
       regions,
-      markets: "h2h",
+      markets: "h2h,spreads",
+      includeLinks: "true",
       oddsFormat: "decimal",
       dateFormat: "iso",
     });
@@ -143,23 +159,68 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
       API_BASE + "/sports/" + tournamentKey + "/events/" + event.id + "/odds?" + oddsParams.toString()
     );
 
+    let spread: UpcomingOdds["spread"] = null;
+    let betUrl: string | null = null;
+
     if (oddsResponse?.bookmakers?.length) {
       let bestEala: number | null = null;
       let bestOpponent: number | null = null;
       let resolvedOpponentName = nextMatch.opponent;
+      let bestEalaLink: string | null = null;
+      let fallbackLink: string | null = oddsResponse.link ?? null;
+
+      let bestSpreadEalaPrice: number | null = null;
+      let bestSpread: UpcomingOdds["spread"] = null;
+      let bestSpreadLink: string | null = null;
 
       for (const bookmaker of oddsResponse.bookmakers) {
-        const market = bookmaker.markets?.find((item) => item.key === "h2h");
-        if (!market) continue;
+        const h2h = bookmaker.markets?.find((item) => item.key === "h2h");
+        const spreads = bookmaker.markets?.find((item) => item.key === "spreads");
 
-        for (const outcome of market.outcomes ?? []) {
-          if (!Number.isFinite(outcome.price)) continue;
+        if (bookmaker.link) fallbackLink = fallbackLink ?? bookmaker.link;
+        if (h2h?.link) fallbackLink = fallbackLink ?? h2h.link;
+        if (spreads?.link) fallbackLink = fallbackLink ?? spreads.link;
 
-          if (isEala(outcome.name)) {
-            bestEala = bestEala === null ? outcome.price : Math.max(bestEala, outcome.price);
-          } else if (matchesOpponent(outcome.name, nextMatch.opponent)) {
-            bestOpponent = bestOpponent === null ? outcome.price : Math.max(bestOpponent, outcome.price);
-            resolvedOpponentName = outcome.name;
+        if (h2h) {
+          for (const outcome of h2h.outcomes ?? []) {
+            if (!Number.isFinite(outcome.price)) continue;
+
+            if (isEala(outcome.name)) {
+              if (bestEala === null || outcome.price > bestEala) {
+                bestEala = outcome.price;
+                bestEalaLink = outcome.link ?? h2h.link ?? bookmaker.link ?? null;
+              }
+            } else if (matchesOpponent(outcome.name, nextMatch.opponent)) {
+              bestOpponent = bestOpponent === null ? outcome.price : Math.max(bestOpponent, outcome.price);
+              resolvedOpponentName = outcome.name;
+            }
+          }
+        }
+
+        if (spreads) {
+          const ealaOutcome = spreads.outcomes?.find(
+            (outcome) => isEala(outcome.name) && Number.isFinite(outcome.price) && Number.isFinite(outcome.point)
+          );
+          const opponentOutcome = spreads.outcomes?.find(
+            (outcome) =>
+              matchesOpponent(outcome.name, nextMatch.opponent) &&
+              Number.isFinite(outcome.price) &&
+              Number.isFinite(outcome.point)
+          );
+
+          if (ealaOutcome && opponentOutcome) {
+            if (bestSpreadEalaPrice === null || ealaOutcome.price > bestSpreadEalaPrice) {
+              bestSpreadEalaPrice = ealaOutcome.price;
+              bestSpread = {
+                eala: ealaOutcome.price.toFixed(2),
+                opponent: opponentOutcome.price.toFixed(2),
+                opponentName: opponentOutcome.name,
+                ealaPoint: Number(ealaOutcome.point),
+                opponentPoint: Number(opponentOutcome.point),
+              };
+              bestSpreadLink =
+                ealaOutcome.link ?? spreads.link ?? bookmaker.link ?? null;
+            }
           }
         }
       }
@@ -171,11 +232,16 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
           opponentName: resolvedOpponentName,
         };
       }
+
+      spread = bestSpread;
+      betUrl = bestEalaLink ?? bestSpreadLink ?? fallbackLink;
     }
-  }
 
+    if (!matchWinner && !spread) return null;
 
-  if (!matchWinner) return null;
-
-  return matchWinner;
+    return {
+      matchWinner,
+      spread,
+      betUrl,
+    };
 }

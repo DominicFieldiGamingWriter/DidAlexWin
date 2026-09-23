@@ -328,12 +328,34 @@ export default async function Home() {
                 <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
               </div>
             </div>
-            {odds && (
+            {odds?.matchWinner && (
               <div className="upcoming-odds">
                 <span>MATCH WINNER ODDS</span>
-                <strong>Alex Eala - {odds.eala}</strong>
-                <b>·</b>
-                <strong>{odds.opponentName} - {odds.opponent}</strong>
+                <div className="upcoming-odds-values">
+                  <strong>Alex Eala - {odds.matchWinner.eala}</strong>
+                  <b>·</b>
+                  <strong>{odds.matchWinner.opponentName} - {odds.matchWinner.opponent}</strong>
+                </div>
+              </div>
+            )}
+            {odds?.spread && (
+              <div className="upcoming-odds">
+                <span>HANDICAP SPREAD ODDS</span>
+                <div className="upcoming-odds-values">
+                  <strong>Alex Eala - {odds.spread.eala} ({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint})</strong>
+                  <b>·</b>
+                  <strong>{odds.spread.opponentName} - {odds.spread.opponent} ({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint})</strong>
+                </div>
+              </div>
+            )}
+            {(odds?.matchWinner || odds?.spread) && (
+              <div className="upcoming-bet-line">
+                {odds.betUrl ? (
+                  <a href={odds.betUrl} target="_blank" rel="noopener noreferrer">Click here to bet.</a>
+                ) : (
+                  <span>Click here to bet.</span>
+                )}
+                <span> Gamble responsibly. 21+</span>
               </div>
             )}
           </div>
