@@ -64,7 +64,7 @@ async function fetchTable<T>(path: string): Promise<T[]> {
       headers: {
         apikey: SUPABASE_KEY,
       },
-      next: { revalidate: 60 },
+      cache: "no-store",
     }
   );
 

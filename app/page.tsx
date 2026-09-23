@@ -2,7 +2,8 @@ import Image from "next/image";
 import { getEalaDashboardFromSupabase } from "../lib/supabase";
 import RefreshOnInterval from "./refresh";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";
