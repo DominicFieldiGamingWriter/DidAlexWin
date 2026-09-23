@@ -214,6 +214,11 @@ export default async function Home() {
               </div>
               <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
             </div>
+            <div className="match-details match-details-top">
+              <div><span>ROUND</span><strong>{latest ? roundText(latest.round_name) : "—"}</strong></div>
+              <div><span>SURFACE</span><strong>{latest?.Surface ? titleCase(latest.Surface) : "—"}</strong></div>
+              <div><span>VENUE</span><strong>{latest?.city ? titleCase(latest.city) : "—"}</strong></div>
+            </div>
           </div>
           <div className="scoreboard">
             <div className="scoreboard-head"><span></span><span>SET 1</span><span>SET 2</span><span>SET 3</span></div>
@@ -226,21 +231,11 @@ export default async function Home() {
               {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.opponent[index] ?? "—"}</strong>)}
             </div>
           </div>
-          <div className="match-details">
-            <div><span>ROUND</span><strong>{latest ? roundText(latest.round_name) : "—"}</strong></div>
-            <div><span>SURFACE</span><strong>{latest?.Surface ? titleCase(latest.Surface) : "—"}</strong></div>
-            <div><span>VENUE</span><strong>{latest?.city ? titleCase(latest.city) : "—"}</strong></div>
-          </div>
         </div>
       </section>
       <section className="upcoming-section">
         <div className="section-heading-row upcoming-heading-row">
           <h2 className="section-heading">Who does Alex play next?</h2>
-          <div className="upcoming-meta upcoming-meta-outside">
-            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
-            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>TIME</span><strong>{data.nextMatch?.matchTime ?? "TBA"}</strong></div>
-          </div>
         </div>
         <div className="upcoming-card">
           <div>
@@ -258,6 +253,11 @@ export default async function Home() {
                 ? "Opponent to be confirmed"
                 : "Scheduled fixture"}
             </div>
+          </div>
+          <div className="upcoming-meta">
+            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
+            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
+            <div><span>TIME</span><strong>{data.nextMatch?.matchTime ?? "TBA"}</strong></div>
           </div>
         </div>
       </section>

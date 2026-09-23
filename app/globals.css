@@ -962,3 +962,30 @@ footer {
   font-weight: 800;
   letter-spacing: .2px;
 }
+
+
+/* Latest-result details: use the unused top-right area. */
+.match-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(430px, 1.05fr);
+  gap: 30px;
+  align-items: start;
+}
+
+.match-details-top {
+  margin-top: 0;
+}
+
+.match-details-top > div {
+  min-height: 72px;
+}
+
+.match-details-top strong {
+  font-size: 16px;
+}
+
+@media (max-width: 900px) {
+  .match-main {
+    grid-template-columns: 1fr;
+  }
+}
