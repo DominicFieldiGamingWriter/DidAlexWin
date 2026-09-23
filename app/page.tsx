@@ -360,7 +360,7 @@ export default async function Home() {
 
       <section className="section-card grand-slam-card">
         <div className="grand-slam-heading">
-          <h2 className="section-title">CAREER GRAND SLAM RECORD</h2>
+          <h2 className="section-title">CAREER GRAND SLAM RECORD (SINGLES)</h2>
         </div>
         <div className="grand-slam-grid">
           {[["Australian Open","SINGLES"],["French Open","SINGLES"],["Wimbledon","SINGLES"],["US Open","SINGLES"]].map(([slam])=>{
