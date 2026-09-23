@@ -343,6 +343,8 @@ async function sync(){
             ]);
           }
         }
+      } catch(error) {
+        console.error("Next-match fallback discovery failed:", error);
       }
     }
     const found=Boolean(upcoming);
