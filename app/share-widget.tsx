@@ -57,7 +57,7 @@ export default function ShareWidget({
             rel="noopener noreferrer"
             aria-label="Share this result on X"
           >
-            X
+            X (Twitter)
           </a>
         </div>
       </div>
