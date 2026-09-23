@@ -28,6 +28,7 @@ const EALA_ID = 330332;
 
 type SupabaseMatch = {
   match_start: string | null;
+  match_date: string | null;
   round_name: string | null;
   eala_won: boolean | null;
   raw_json: WtaMatch;
@@ -153,14 +154,21 @@ function orientedScore(value: unknown, ealaWon: boolean | null | undefined): str
 }
 
 function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"] {
-  return [...matches].sort((a,b)=>{
-    const at=exactMatchTimestamp(a.raw_json),bt=exactMatchTimestamp(b.raw_json);
-    const ad=Number.isNaN(at)?Date.parse(a.match_start??""):at,bd=Number.isNaN(bt)?Date.parse(b.match_start??""):bt;
-    return bd-ad;
-  }).filter(m=>m.eala_won!==null && m.eala_won!==undefined).slice(0,5).map(m=>{
-    const raw=m.raw_json,rawDate=raw.MatchTimeStamp??m.match_start;
-    return {result:m.eala_won===true?"W" as const:"L" as const,opponent:opponentName(raw),tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:orientedScore(raw.scores,m.eala_won)};
-  });
+  return [...matches]
+    .filter((m) => m.eala_won !== null && m.eala_won !== undefined)
+    .slice(0, 5)
+    .map((m) => {
+      const raw = m.raw_json;
+      const rawDate = raw.MatchTimeStamp ?? m.match_start ?? m.match_date;
+      return {
+        result: m.eala_won === true ? "W" as const : "L" as const,
+        opponent: opponentName(raw),
+        tournament: String(raw.TournamentName ?? "Tournament"),
+        date: typeof rawDate === "string" ? new Date(rawDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—",
+        round: String(m.round_name ?? "—"),
+        score: orientedScore(raw.scores, m.eala_won),
+      };
+    });
 }
 
 function grandSlamYears(matches: SupabaseMatch[]){
@@ -195,25 +203,14 @@ function grandSlamYears(matches: SupabaseMatch[]){
 }
 
 function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
-  const sorted = [...matches].filter((match) => Number(match.raw_json.winner) > 0).sort((a, b) => {
-    const exactDifference =
-      exactMatchTimestamp(b.raw_json) - exactMatchTimestamp(a.raw_json);
-
-    if (!Number.isNaN(exactDifference) && exactDifference !== 0) {
-      return exactDifference;
-    }
-
-    const dateDifference =
-      Date.parse(b.match_start ?? "") - Date.parse(a.match_start ?? "");
-
-    if (!Number.isNaN(dateDifference) && dateDifference !== 0) {
-      return dateDifference;
-    }
-
-    return roundRank(b.round_name) - roundRank(a.round_name);
-  });
-
-  return sorted[0] ? { ...sorted[0].raw_json, eala_won: sorted[0].eala_won, match_start: sorted[0].match_start } : null;
+  const latest = matches.find((match) => match.eala_won !== null && match.eala_won !== undefined);
+  return latest ? {
+    ...latest.raw_json,
+    eala_won: latest.eala_won,
+    match_start: latest.match_start,
+    match_date: latest.match_date,
+    round_name: latest.round_name,
+  } : null;
 }
 
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
@@ -221,7 +218,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
     const seasonYear=2026;
     const [matches, statsRows, seasonRows, rankings, nextRows] = await Promise.all([
       fetchTable<SupabaseMatch>(
-        `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,round_name,eala_won,raw_json&limit=500`
+        `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,match_date,round_name,eala_won,raw_json&order=match_start.desc.nullslast,match_date.desc.nullslast&limit=500`
       ),
       fetchTable<SupabaseStats>(
         `eala_stats?player_id=eq.${EALA_ID}&select=updated_at,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles&limit=1`
