@@ -543,7 +543,6 @@ async function resolveExactMatchStarts(candidates:Row[]){
   return resolved;
 }
 
-}
 Deno.serve(async(req)=>{
   if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
   try{
