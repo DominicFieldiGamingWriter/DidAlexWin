@@ -192,7 +192,7 @@ async function sync(){
       try {
         const from=new Date(Date.now()-24*60*60*1000).toISOString().slice(0,10);
         const to=new Date(Date.now()+60*24*60*60*1000).toISOString().slice(0,10);
-        const tournamentPayload=await getJson(WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to);
+        const tournamentPayload=await getTournamentJson(WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to);
         const upcomingTournaments=records(tournamentPayload).map(item=>{
           const group=item.tournamentGroup&&typeof item.tournamentGroup==="object"?item.tournamentGroup as Row:{};
           return {groupId:num(group.id),year:num(item.year),start:text(item.startDate),end:text(item.endDate),title:text(item.title),surface:text(item.surface)};
@@ -245,7 +245,7 @@ async function sync(){
             }
           }catch{}
           try{
-            const payload=await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
+            const payload=await getTournamentJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
             successfulChecks++;
             const players=records(payload,"players").length?records(payload,"players"):records(payload);
             if(players.some(playerIdsMatch)){placeholder=t as Row;break;}
@@ -275,7 +275,7 @@ async function sync(){
                 const opponentId=playerA===String(EALA_ID)?playerB:playerA;
                 let opponentName="";
                 try{
-                  const opponentPayload=await getJson(WTA+"/players/"+opponentId);
+                  const opponentPayload=await getTournamentJson(WTA+"/players/"+opponentId);
                   const opponentRecord=opponentPayload&&typeof opponentPayload==="object"
                     ? ((opponentPayload as Row).player&&typeof (opponentPayload as Row).player==="object"
                       ? (opponentPayload as Row).player as Row
@@ -298,7 +298,7 @@ async function sync(){
             }
           }
           try{
-            const drawPayload=placeholderDrawPayload??await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
+            const drawPayload=placeholderDrawPayload??await getTournamentJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
             const drawEvent=drawEvents(drawPayload).find(event=>text(event.EventTypeCode)==="LS"||/Women's Singles/i.test(text(event.DrawTypeTitle)));
             if(drawEvent){
               const drawSize=num(drawEvent.DrawSize)??placeholderDrawSize;
@@ -320,7 +320,7 @@ async function sync(){
                 }
 
                 try{
-                  const matchPayload=await getJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
+                  const matchPayload=await getTournamentJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
                   const scheduled=records(matchPayload,"matches")
                     .filter(item=>
                       text(item.PlayerIDA)===String(EALA_ID) ||
