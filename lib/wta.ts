@@ -154,36 +154,58 @@ function tournamentDates(match: WtaMatch): { start: string; end: string } {
 
 function exactMatchDate(match: WtaMatch): string {
   const candidates = [
+    match.MatchTimeStamp,
     match.matchDate,
     match.match_date,
     match.scheduledTime,
     match.scheduled_time,
     match.date,
   ];
-
   for (const candidate of candidates) {
-    const text = stringValue(candidate);
-    if (text && !Number.isNaN(Date.parse(text))) return text;
+    const value = stringValue(candidate);
+    if (value && !Number.isNaN(Date.parse(value))) return value;
   }
-
   return "";
 }
 
-function matchSortKey(match: WtaMatch): number {
-  const exact = exactMatchDate(match);
-  const exactTimestamp = Date.parse(exact);
+function exactMatchTimestamp(match: WtaMatch): string {
+  const candidates = [
+    match.MatchTimeStamp,
+    match.scheduledTime,
+    match.scheduled_time,
+    match.matchDate,
+    match.match_date,
+    match.date,
+  ];
+  for (const candidate of candidates) {
+    const value = stringValue(candidate);
+    if (value && /T\d{2}:|\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value))) return value;
+  }
+  return "";
+}
 
+function sourceClockTime(value: string): string | null {
+  const found = value.match(/T(\d{2}):(\d{2})/);
+  return found ? `${found[1]}:${found[2]}` : null;
+}
+
+
+function matchSortKey(match: WtaMatch): number {
+  const exact = exactMatchTimestamp(match) || exactMatchDate(match);
+  const exactTimestamp = Date.parse(exact);
   if (!Number.isNaN(exactTimestamp)) {
     return exactTimestamp * 10 + roundRank(stringValue(match.round_name));
   }
 
+  // Tournament dates are used only as an ordering fallback. They are never
+  // written or displayed as the match date.
   const dates = tournamentDates(match);
   const end = Date.parse(dates.end);
   const start = Date.parse(dates.start);
   const datePart = Number.isNaN(end) ? (Number.isNaN(start) ? 0 : start) : end;
-
   return datePart * 10 + roundRank(stringValue(match.round_name));
 }
+
 
 function isCompleted(match: WtaMatch): boolean {
   return (
@@ -280,7 +302,7 @@ function recentScore(raw: WtaMatch): string | null {
 }
 
 function recentSingles(matches: WtaMatch[]): RecentResult[] {
-  return [...matches].filter(isCompleted).sort((a,b)=>matchSortKey(b)-matchSortKey(a)).slice(0,5).map(match=>({result:ealaWon(match)===true?"W":"L",opponent:opponentName(match),tournament:stringValue(match.TournamentName)||"Tournament",date:formatDate(exactMatchDate(match)||tournamentDates(match).end),round:stringValue(match.round_name)||"—",score:recentScore(match)}));
+  return [...matches].filter(isCompleted).sort((a,b)=>matchSortKey(b)-matchSortKey(a)).slice(0,5).map(match=>({result:ealaWon(match)===true?"W":"L",opponent:opponentName(match),tournament:stringValue(match.TournamentName)||"Tournament",date:formatDate(exactMatchDate(match)),round:stringValue(match.round_name)||"—",score:recentScore(match)}));
 }
 
 function buildGrandSlams(matches: WtaMatch[]) {
@@ -436,8 +458,8 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
               venue: stringValue(match.city) || "—",
               tournamentStart: dates.start || tournament.start,
               tournamentEnd: dates.end || tournament.end,
-              timeKnown: Boolean(exactDate),
-              matchTime: exactDate ? new Date(exactDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null,
+              timeKnown: Boolean(exactMatchTimestamp(match)),
+              matchTime: sourceClockTime(exactMatchTimestamp(match)),
             };
           }
 
