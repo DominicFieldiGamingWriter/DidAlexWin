@@ -406,21 +406,30 @@ export default async function Home() {
           <div className="bio-copy">
             <p>
               Alexandra Eala is a professional tennis player from the
-              Philippines, born in Quezon City on 23 May 2005.
+              Philippines, born in Quezon City on 23 May 2005. She began making
+              history at junior level and became the first player from the
+              Philippines to win a junior Grand Slam singles title when she
+              captured the US Open girls' championship in 2022.
             </p>
             <p>
               She is left-handed and stands 1.75m tall. Eala made her WTA Tour
               debut in Miami qualifying in 2021 and trains at the Rafael Nadal
-              Academy in Mallorca.
+              Academy in Mallorca. She has steadily moved from the junior ranks
+              into the professional tour, building her ranking through WTA and
+              ITF events.
             </p>
             <p>
               Her 2025 breakthrough included a semifinal run at the Miami Open,
-              her first WTA final at Eastbourne and her first WTA 125 title at
-              Guadalajara.
+              where she recorded wins over Madison Keys and Iga Swiatek, her
+              first WTA final at Eastbourne and her first WTA 125 title at
+              Guadalajara. The Miami run also made her the first Filipina to
+              reach a WTA 1000 semifinal.
             </p>
             <p>
               In 2026 she won the Washington DC WTA 500, reached the fourth
               round at Wimbledon and reached the third round of the US Open.
+              Her results have continued to establish her as one of the leading
+              players from the Philippines on the WTA Tour.
             </p>
           </div>
         </div>
