@@ -1034,7 +1034,7 @@ footer {
 
 .share-buttons {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1074,18 +1074,6 @@ footer {
 
 .share-button-x {
   border-color: rgba(17,26,41,.24);
-}
-
-.share-button-instagram {
-  border-color: rgba(206,17,38,.25);
-}
-
-.share-widget-status {
-  min-height: 16px;
-  margin: 9px 0 0;
-  color: #7084a1;
-  font-size: 10px;
-  line-height: 1.4;
 }
 
 @media (max-width: 500px) {

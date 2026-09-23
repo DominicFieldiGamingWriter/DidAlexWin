@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 type ShareWidgetProps = {
   result: string;
   tournament: string;
@@ -19,52 +17,17 @@ export default function ShareWidget({
   score,
   siteUrl,
 }: ShareWidgetProps) {
-  const [status, setStatus] = useState("");
-
-  const answer = result === "YES" ? "Yes" : result === "NO" ? "No" : result;
-  const action = result === "YES" ? "Eala beat" : result === "NO" ? "Eala lost to" : "Eala played";
-  const shareText =
-    "Did Alex Eala win? " +
-    answer +
-    ". " +
-    action +
-    " " +
-    opponent +
-    " at " +
-    tournament +
-    ", " +
-    round +
-    (score ? " (" + score + ")." : ".");
+  const shareText = result === "YES"
+    ? "Alex Eala won her latest match! She beat " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round + ". Visit " + siteUrl + " to see who she plays next."
+    : "Did Alex Eala win her last match? No. Sadly, Alex lost to " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round + ". Visit " + siteUrl + " to see who she plays next.";
 
   const xUrl =
     "https://x.com/intent/post?text=" +
-    encodeURIComponent(shareText) +
-    "&url=" +
-    encodeURIComponent(siteUrl);
+    encodeURIComponent(shareText);
 
   const facebookUrl =
     "https://www.facebook.com/sharer/sharer.php?u=" +
     encodeURIComponent(siteUrl);
-
-  async function shareToInstagram() {
-    const textToCopy = shareText + "\n" + siteUrl;
-    const instagramWindow = window.open(
-      "https://www.instagram.com/",
-      "_blank",
-      "noopener,noreferrer"
-    );
-
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      setStatus("Share text copied. Instagram opened in a new tab.");
-    } catch {
-      setStatus("Instagram opened. Copy the result text and site link manually.");
-    }
-
-    if (!instagramWindow) {
-      setStatus("Popup blocked. Allow popups to open Instagram.");
-    }
-  }
 
   return (
     <section className="share-section" aria-labelledby="share-widget-title">
@@ -74,7 +37,7 @@ export default function ShareWidget({
             SHARE THIS RESULT
           </h2>
           <p className="share-widget-copy">
-            Share the latest result from Did Alex Win?
+            Share the latest result on X or Facebook.
           </p>
         </div>
         <div className="share-buttons">
@@ -96,18 +59,7 @@ export default function ShareWidget({
           >
             X
           </a>
-          <button
-            className="share-button share-button-instagram"
-            type="button"
-            onClick={shareToInstagram}
-            aria-label="Share this result on Instagram"
-          >
-            Instagram
-          </button>
         </div>
-        <p className="share-widget-status" aria-live="polite">
-          {status}
-        </p>
       </div>
     </section>
   );
