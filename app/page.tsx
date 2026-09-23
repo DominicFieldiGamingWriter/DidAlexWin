@@ -342,9 +342,14 @@ export default async function Home() {
               <div className="upcoming-odds">
                 <span>MATCH WINNER ODDS</span>
                 <div className="upcoming-odds-values">
-                  <strong>Alex Eala - {odds.matchWinner.eala}</strong>
-                  <b>·</b>
-                  <strong>{odds.matchWinner.opponentName} - {odds.matchWinner.opponent}</strong>
+                  <div className="odds-row">
+                    <span className="odds-player">Alex Eala</span>
+                    <strong className="odds-price">{odds.matchWinner.eala}</strong>
+                  </div>
+                  <div className="odds-row">
+                    <span className="odds-player">{odds.matchWinner.opponentName}</span>
+                    <strong className="odds-price">{odds.matchWinner.opponent}</strong>
+                  </div>
                 </div>
               </div>
             )}
@@ -352,9 +357,14 @@ export default async function Home() {
               <div className="upcoming-odds">
                 <span>HANDICAP SPREAD ODDS</span>
                 <div className="upcoming-odds-values">
-                  <strong>Alex Eala ({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint}) - {odds.spread.eala}</strong>
-                  <b>·</b>
-                  <strong>{odds.spread.opponentName} ({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint}) - {odds.spread.opponent}</strong>
+                  <div className="odds-row">
+                    <span className="odds-player">Alex Eala <span className="odds-spread">({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint})</span></span>
+                    <strong className="odds-price">{odds.spread.eala}</strong>
+                  </div>
+                  <div className="odds-row">
+                    <span className="odds-player">{odds.spread.opponentName} <span className="odds-spread">({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint})</span></span>
+                    <strong className="odds-price">{odds.spread.opponent}</strong>
+                  </div>
                 </div>
               </div>
             )}

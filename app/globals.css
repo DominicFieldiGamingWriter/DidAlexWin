@@ -1364,3 +1364,107 @@ footer {
     padding: 24px 22px;
   }
 }
+
+
+/* Refined odds rows: compact price boxes, with a responsive mobile layout. */
+.next-match-odds-card .upcoming-odds-values {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.next-match-odds-card .odds-row {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 7px 7px 16px;
+  background: #182438;
+  border: 1px solid #293850;
+  border-radius: 11px;
+}
+
+.next-match-odds-card .odds-player {
+  min-width: 0;
+  color: #f4f7fb;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.next-match-odds-card .odds-spread {
+  color: #aab8cb;
+  font-weight: 800;
+}
+
+.next-match-odds-card .odds-price {
+  min-width: 72px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #26364f;
+  border: 1px solid #3b4d69;
+  color: #ffffff;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Share widget: match the dark odds-card palette. */
+.share-widget {
+  background: #111a29;
+  border: 1px solid #ce1126;
+  color: #ffffff;
+}
+
+.share-widget-title {
+  color: #fcd116;
+}
+
+.share-widget-copy {
+  color: #aab8cb;
+}
+
+.share-button {
+  background: #182438;
+  border-color: #293850;
+  color: #f4f7fb;
+}
+
+.share-button:hover {
+  border-color: #3b4d69;
+  background: #26364f;
+  color: #ffffff;
+}
+
+.share-button-facebook,
+.share-button-x {
+  border-color: #293850;
+}
+
+.share-button:focus-visible {
+  outline-color: rgba(252,209,22,.35);
+}
+
+@media (max-width: 600px) {
+  .next-match-odds-card .upcoming-odds-values {
+    gap: 7px;
+  }
+
+  .next-match-odds-card .odds-row {
+    min-height: 46px;
+    gap: 10px;
+    padding-left: 13px;
+  }
+
+  .next-match-odds-card .odds-player {
+    font-size: 15px;
+  }
+
+  .next-match-odds-card .odds-price {
+    min-width: 66px;
+    padding: 7px 10px;
+    font-size: 16px;
+  }
+}
