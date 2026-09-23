@@ -166,7 +166,11 @@ function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"]
         tournament: String(raw.TournamentName ?? "Tournament"),
         date: typeof rawDate === "string" ? new Date(rawDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—",
         round: String(m.round_name ?? "—"),
-        score: orientedScore(raw.scores, m.eala_won),
+        score: (() => {
+          const score = orientedScore(raw.scores, m.eala_won);
+          const reasonCode = String(raw.reason_code ?? "").toUpperCase();
+          return score ? (reasonCode === "R" ? score + " RET" : score) : null;
+        })(),
       };
     });
 }
