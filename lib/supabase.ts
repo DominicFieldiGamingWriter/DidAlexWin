@@ -92,6 +92,18 @@ function exactMatchTimestamp(raw: WtaMatch | null | undefined) {
   return NaN;
 }
 
+function recentScore(raw: WtaMatch): string | null {
+  const value = typeof raw.scores === "string" ? raw.scores.trim() : "";
+  if (!value) return null;
+  const ealaIs1 = String(raw.player_1) === String(EALA_ID);
+  return value.split(/\s+/).map((set) => {
+    const parts = set.split("-");
+    const first = parts[0] ?? "";
+    const second = (parts[1] ?? "").replace(/\(.*/, "");
+    return ealaIs1 ? `${first}-${second}` : `${second}-${first}`;
+  }).join(" ");
+}
+
 function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"] {
   return [...matches].sort((a,b)=>{
     const at=exactMatchTimestamp(a.raw_json),bt=exactMatchTimestamp(b.raw_json);
@@ -101,7 +113,7 @@ function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"]
     const raw=m.raw_json,winner=Number(raw.winner),ealaIs1=String(raw.player_1)===String(EALA_ID);
     const opponent=raw.opponent&&typeof raw.opponent==="object"?String((raw.opponent as Record<string,unknown>).fullName??"Opponent"):String(ealaIs1?raw.team_name_2??"Opponent":raw.team_name_1??"Opponent");
     const rawDate=raw.MatchTimeStamp??raw.matchDate??m.match_start;
-    return {result:winner===(ealaIs1?1:2)?"W" as const:"L" as const,opponent,tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—")};
+    return {result:winner===(ealaIs1?1:2)?"W" as const:"L" as const,opponent,tournament:String(raw.TournamentName??"Tournament"),date:typeof rawDate==="string"?new Date(rawDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—",round:String(raw.round_name??"—"),score:recentScore(raw)};
   });
 }
 
@@ -196,6 +208,9 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             tournamentStart: next.tournament_start ?? "",
             tournamentEnd: next.tournament_end ?? "",
             timeKnown: Boolean(next.match_start),
+            matchTime: next.match_start
+              ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Singapore" })
+              : null,
           }
         : null,
       singlesRank,

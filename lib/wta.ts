@@ -5,7 +5,7 @@ const FIVE_MINUTES = 300;
 
 export type WtaMatch = Record<string, unknown>;
 
-export type RecentResult = { result: "W" | "L"; opponent: string; tournament: string; date: string; round: string };
+export type RecentResult = { result: "W" | "L"; opponent: string; tournament: string; date: string; round: string; score: string | null };
 
 export type DashboardData = {
   lastUpdated: string | null;
@@ -266,8 +266,20 @@ function bestRound(current: string, candidate: string): string {
   return roundRank(candidate) > roundRank(current) ? candidate : current;
 }
 
+function recentScore(raw: WtaMatch): string | null {
+  const value = stringValue(raw.scores).trim();
+  if (!value) return null;
+  const ealaIs1 = stringValue(raw.player_1) === String(EALA_ID);
+  return value.split(/\s+/).map((set) => {
+    const parts = set.split("-");
+    const first = parts[0] ?? "";
+    const second = (parts[1] ?? "").replace(/\(.*/, "");
+    return ealaIs1 ? `${first}-${second}` : `${second}-${first}`;
+  }).join(" ");
+}
+
 function recentSingles(matches: WtaMatch[]): RecentResult[] {
-  return [...matches].filter(isCompleted).sort((a,b)=>matchSortKey(b)-matchSortKey(a)).slice(0,5).map(match=>({result:ealaWon(match)===true?"W":"L",opponent:opponentName(match),tournament:stringValue(match.TournamentName)||"Tournament",date:formatDate(exactMatchDate(match)||tournamentDates(match).end),round:stringValue(match.round_name)||"—"}));
+  return [...matches].filter(isCompleted).sort((a,b)=>matchSortKey(b)-matchSortKey(a)).slice(0,5).map(match=>({result:ealaWon(match)===true?"W":"L",opponent:opponentName(match),tournament:stringValue(match.TournamentName)||"Tournament",date:formatDate(exactMatchDate(match)||tournamentDates(match).end),round:stringValue(match.round_name)||"—",score:recentScore(match)}));
 }
 
 function buildGrandSlams(matches: WtaMatch[]) {
@@ -424,6 +436,7 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
               tournamentStart: dates.start || tournament.start,
               tournamentEnd: dates.end || tournament.end,
               timeKnown: Boolean(exactDate),
+              matchTime: exactDate ? new Date(exactDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null,
             };
           }
 
@@ -437,6 +450,7 @@ async function findNextMatch(): Promise<DashboardData["nextMatch"]> {
             tournamentStart: tournament.start,
             tournamentEnd: tournament.end,
             timeKnown: false,
+            matchTime: null,
           };
         } catch {
           continue;

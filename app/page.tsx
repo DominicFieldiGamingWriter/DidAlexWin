@@ -239,7 +239,7 @@ export default async function Home() {
           <div className="upcoming-meta upcoming-meta-outside">
             <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
             <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div><span>STATUS</span><strong>{data.nextMatch ? (data.nextMatch.timeKnown ? "Scheduled" : "Time TBA") : "—"}</strong></div>
+            <div><span>TIME</span><strong>{data.nextMatch?.matchTime ?? "TBA"}</strong></div>
           </div>
         </div>
         <div className="upcoming-card">
@@ -281,6 +281,7 @@ export default async function Home() {
                     <strong className="form-first-name">{name.first}</strong>
                     {name.surname && <strong className="form-surname">{name.surname}</strong>}
                     <span>{formatTournament(match.tournament)} · {match.date}</span>
+                    {match.score && <small className="form-score">{match.score}</small>}
                   </div>
                 </div>
               );
