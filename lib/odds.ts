@@ -57,7 +57,7 @@ type OddsResponse = {
 };
 
 const API_BASE = "https://api.the-odds-api.com/v4";
-const DEFAULT_REGIONS = "uk";
+const DEFAULT_REGIONS = "uk,eu,au";
 const CACHE_SECONDS = 2 * 60 * 60;
 
 const WTA_SPORT_KEYS: Record<string, string> = {
@@ -145,7 +145,7 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
   const event = targetEvents[0];
   const regions = process.env.THE_ODDS_API_REGIONS ?? DEFAULT_REGIONS;
 
-  let matchWinner: MatchWinnerOdds | null = null;
+  let matchWinner: UpcomingOdds["matchWinner"] = null;
   if (event?.id) {
     const oddsParams = new URLSearchParams({
       apiKey,
