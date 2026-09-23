@@ -296,7 +296,7 @@ async function sync(){
                   opponent:opponentName||"Opponent",
                   matchDate:ts.slice(0,10),
                   matchStart:ts,
-                  source:{source:"WTA tournament matches",match_id:text(scheduled.MatchID)||text(scheduled.Id),round_id:num(scheduled.RoundID)}
+                  source:{source:"WTA tournament matches",match_id:text(scheduled.MatchID)||text(scheduled.Id),round_id:num(scheduled.RoundID),match_timestamp:ts}
                 };
               }
             }catch(e){
@@ -316,8 +316,8 @@ async function sync(){
                 record={
                   ...record,
                   tournament:text(drawEvent.TournamentTitle)||record.tournament,
-                  roundName:drawRound==="TBA"?record.roundName:drawRound,
-                  opponent:record.opponent==="Opponent"||record.opponent==="TBA"?drawOpponent:record.opponent,
+                  roundName:record.matchStart?record.roundName:(drawRound==="TBA"?record.roundName:drawRound),
+                  opponent:record.matchStart?record.opponent:(record.opponent==="Opponent"||record.opponent==="TBA"?drawOpponent:record.opponent),
                   source:{...record.source,draw_match_id:text(future.match.Id),draw_round_id:future.roundId,draw_size:drawSize}
                 };
                 if(!record.matchStart && valid){
