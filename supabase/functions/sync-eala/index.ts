@@ -1,6 +1,10 @@
 import postgres from "npm:postgres@3.4.7";
 
 const EALA_ID = 330332;
+const SYNC_LOCK_KEY = 330332;
+const MATCH_PAGE_SIZE = 100;
+const MAX_MATCH_PAGES = 100;
+const MATCH_BATCH_SIZE = 100;
 const WTA = "https://api.wtatennis.com/tennis";
 const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { max: 1, prepare: false, ssl: "require", types: { json: { to: 114, from: [114, 3802], serialize: (value: unknown) => value, parse: (value: string) => JSON.parse(value) } } });
 const q = (text: string, params: unknown[] = []) => db.unsafe(text, params);
@@ -52,25 +56,74 @@ async function getRanking(type:string,metric:string){
   }
   return {ranking:null,row:null};
 }
-function toMatch(m:Row,category:string){
+function stringValue(v: unknown) {
+  return v === null || v === undefined ? "" : String(v);
+}
+function matchKey(m: Row, category: string) {
+  const t=tournament(m), group=t.tournamentGroup && typeof t.tournamentGroup === "object" ? t.tournamentGroup as Row : {};
+  const groupId=num(group.id) ?? num(t.id) ?? num(m.tournamentId);
+  const year=num(t.year) ?? num(m.tourn_year);
+  return [
+    category,
+    stringValue(groupId),
+    stringValue(year),
+    text(m.round_name),
+    stringValue(m.player_1),
+    stringValue(m.player_2),
+    stringValue(m.player_3),
+    stringValue(m.player_4)
+  ].join("|");
+}
+function toMatch(m:Row,category:string,exactMatchStart?:string){
   const id=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId)??stableEventId(m,category);
   const t=tournament(m), p1=text(m.player_1), w=num(m.winner);
-  return {event_id:id,player_id:EALA_ID,match_start:matchStart(m)||null,status:text(m.status)||(completed(m)?"completed":"scheduled"),category,
+  return {event_id:id,player_id:EALA_ID,match_start:exactMatchStart||matchStart(m)||null,status:text(m.status)||(completed(m)?"completed":"scheduled"),category,
     tournament_name:tournamentName(m),tournament_slug:text(m.tournamentSlug)||text(t.slug)||null,tournament_id:num(t.id)??num(m.tournamentId),
     season_name:text(m.seasonName)||text(m.year)||null,season_id:num(m.seasonId)??num(t.seasonId),round_name:text(m.round_name)||null,round_number:num(m.round_number),
     surface:text(m.Surface)||text(m.surface)||null,winner_side:w===1?"home":w===2?"away":"unknown",
-    eala_side:p1===String(EALA_ID)?"home":text(m.player_2)===String(EALA_ID)?"away":"unknown",eala_won:won(m),
+    eala_side=p1===String(EALA_ID)?"home":text(m.player_2)===String(EALA_ID)?"away":"unknown",eala_won:won(m),
     home_players:m.home_players??m.player_1,away_players:m.away_players??m.player_2,set_scores:m.scores??[],
     duration_seconds:num(m.durationSeconds)??num(m.duration_seconds),custom_id:text(m.customId)||null,raw_json:m};
 }
-async function upsertMatches(list:Row[],category:string){
-  const rows=list.map(m=>toMatch(m,category)).filter(Boolean) as Row[];
-  for(const r of rows){
-    await q("insert into public.eala_matches(event_id,player_id,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::jsonb,$19::jsonb,$20,$21,$22::jsonb,now()) on conflict(event_id) do update set player_id=excluded.player_id,match_start=excluded.match_start,status=excluded.status,category=excluded.category,tournament_name=excluded.tournament_name,tournament_slug=excluded.tournament_slug,tournament_id=excluded.tournament_id,season_name=excluded.season_name,season_id=excluded.season_id,round_name=excluded.round_name,round_number=excluded.round_number,surface=excluded.surface,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,duration_seconds=excluded.duration_seconds,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()",[
-      r.event_id,r.player_id,r.match_start,r.status,r.category,r.tournament_name,r.tournament_slug,r.tournament_id,
-      r.season_name,r.season_id,r.round_name,r.round_number,r.surface,r.winner_side,r.eala_side,r.eala_won,
-      JSON.stringify(r.home_players),JSON.stringify(r.away_players),JSON.stringify(r.set_scores),r.duration_seconds,r.custom_id,JSON.stringify(r.raw_json)
-    ]);
+async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,string>){
+  const rows=list.map(m=>toMatch(m,category,exactStarts.get(matchKey(m,category)))).filter(Boolean) as Row[];
+  for(let offset=0;offset<rows.length;offset+=MATCH_BATCH_SIZE){
+    const batch=rows.slice(offset,offset+MATCH_BATCH_SIZE);
+    const payload=JSON.stringify(batch);
+    await q(`insert into public.eala_matches(event_id,player_id,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,updated_at)
+      select event_id,player_id,match_start,status,category,tournament_name,tournament_slug,tournament_id,season_name,season_id,round_name,round_number,surface,winner_side,eala_side,eala_won,home_players,away_players,set_scores,duration_seconds,custom_id,raw_json,now()
+      from jsonb_to_recordset($1::jsonb) as x(
+        event_id bigint,player_id bigint,match_start timestamptz,status text,category text,tournament_name text,tournament_slug text,tournament_id bigint,
+        season_name text,season_id bigint,round_name text,round_number integer,surface text,winner_side text,eala_side text,eala_won boolean,
+        home_players jsonb,away_players jsonb,set_scores jsonb,duration_seconds integer,custom_id text,raw_json jsonb
+      )
+      on conflict(event_id) do update set
+        player_id=excluded.player_id,match_start=excluded.match_start,status=excluded.status,category=excluded.category,
+        tournament_name=excluded.tournament_name,tournament_slug=excluded.tournament_slug,tournament_id=excluded.tournament_id,
+        season_name=excluded.season_name,season_id=excluded.season_id,round_name=excluded.round_name,round_number=excluded.round_number,
+        surface=excluded.surface,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,
+        home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,
+        duration_seconds=excluded.duration_seconds,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()
+      where public.eala_matches.player_id is distinct from excluded.player_id
+        or public.eala_matches.match_start is distinct from excluded.match_start
+        or public.eala_matches.status is distinct from excluded.status
+        or public.eala_matches.category is distinct from excluded.category
+        or public.eala_matches.tournament_name is distinct from excluded.tournament_name
+        or public.eala_matches.tournament_slug is distinct from excluded.tournament_slug
+        or public.eala_matches.tournament_id is distinct from excluded.tournament_id
+        or public.eala_matches.season_name is distinct from excluded.season_name
+        or public.eala_matches.season_id is distinct from excluded.season_id
+        or public.eala_matches.round_name is distinct from excluded.round_name
+        or public.eala_matches.round_number is distinct from excluded.round_number
+        or public.eala_matches.surface is distinct from excluded.surface
+        or public.eala_matches.winner_side is distinct from excluded.winner_side
+        or public.eala_matches.eala_side is distinct from excluded.eala_side
+        or public.eala_matches.eala_won is distinct from excluded.eala_won
+        or public.eala_matches.home_players is distinct from excluded.home_players
+        or public.eala_matches.away_players is distinct from excluded.away_players
+        or public.eala_matches.set_scores is distinct from excluded.set_scores
+        or public.eala_matches.duration_seconds is distinct from excluded.duration_seconds
+        or public.eala_matches.custom_id is distinct from excluded.custom_id`,[payload]);
   }
   return rows.length;
 }
@@ -96,23 +149,25 @@ async function dbHttpGetJson(url: string) {
 }
 
 async function sync(){
-  const recent=await q("select started_at from public.eala_sync_runs order by started_at desc limit 1");
-  if(recent[0]?.started_at && Date.now()-new Date(recent[0].started_at).getTime()<30000)return {skipped:true};
-  const run=await q("insert into public.eala_sync_runs(started_at) values(now()) returning id"); const runId=run[0].id;
+  const lock=await q("select pg_try_advisory_lock($1) as locked",[SYNC_LOCK_KEY]);
+  if(lock[0]?.locked !== true)return {skipped:true,reason:"sync_locked"};
+  let runId:number|null=null;
   try{
-    const [profile,sPayload,dPayload]=await Promise.all([
+    const run=await q("insert into public.eala_sync_runs(started_at) values(now()) returning id");
+    runId=Number(run[0].id);
+    const [profile,singles,doubles]=await Promise.all([
       getJson(WTA+"/players/"+EALA_ID),
-      getJson(WTA+"/players/"+EALA_ID+"/matches?page=0&pageSize=500&id="+EALA_ID+"&year=&type=S&sort=desc&tournamentGroupId="),
-      getJson(WTA+"/players/"+EALA_ID+"/matches?page=0&pageSize=500&id="+EALA_ID+"&year=&type=D&sort=desc&tournamentGroupId=")
+      getPlayerMatches("S"),
+      getPlayerMatches("D")
     ]);
     const [sRank,dRank]=await Promise.all([
       getRanking("rankSingles","singles"),
       getRanking("rankDoubles","doubles")
     ]);
-    const singles=records(sPayload,"matches"),doubles=records(dPayload,"matches");
     const p=profile&&typeof profile==="object"?profile as Row:{},po=p.player&&typeof p.player==="object"?p.player as Row:p;
     await q("insert into public.eala_player(player_id,name,slug,country,profile_json,updated_at) values($1,$2,$3,$4,$5::jsonb,now()) on conflict(player_id) do update set name=excluded.name,slug=excluded.slug,country=excluded.country,profile_json=excluded.profile_json,updated_at=now()",[EALA_ID,text(po.fullName)||text(po.name)||"Alexandra Eala",text(po.slug)||"alexandra-eala",text(po.country)||"PHI",JSON.stringify(p)]);
-    const sc=await upsertMatches(singles,"singles"),dc=await upsertMatches(doubles,"doubles");
+    const exactStarts=await resolveExactMatchStarts(singles.filter(m=>completed(m)&&matchStart(m)));
+    const sc=await upsertMatches(singles,"singles",exactStarts),dc=await upsertMatches(doubles,"doubles",new Map());
     let rc=0;
     for(const [item,kind] of [[sRank,"singles"],[dRank,"doubles"]] as const){
       const ranking=item.ranking;
@@ -123,10 +178,6 @@ async function sync(){
     const year=new Date().getUTCFullYear(), cy=(a:Row[])=>a.filter(m=>completed(m)&&matchStart(m)&&new Date(matchStart(m)).getUTCFullYear()===year);
     const cs=cy(singles),cd=cy(doubles);
     const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
-    // Refresh exact timestamps for every current-year singles match. The WTA
-    // player-history feed uses tournament dates, while the tournament match
-    // feed contains the real scheduled timestamp.
-    for (const candidate of cs) await refreshExactMatchStart(candidate);
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
     const losses=(a:Row[])=>a.filter(m=>won(m)===false).length;
     const titles=(a:Row[])=>a.filter(m=>text(m.round_name)==="F"&&won(m)===true&&!/125/.test(tournamentName(m))).length;
@@ -275,7 +326,12 @@ async function sync(){
     const placeholderExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
     await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,found||placeholderExists,runId]);
     return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:found||placeholderExists};
-  }catch(e){await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);throw e;}
+  }catch(e){
+    if(runId!==null)await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);
+    throw e;
+  }finally{
+    try{await q("select pg_advisory_unlock($1)",[SYNC_LOCK_KEY]);}catch(unlockError){console.error("Failed to release sync advisory lock:",unlockError);}
+  }
 }
 function playerIdsMatch(value: unknown): boolean {
   if (typeof value === "string" || typeof value === "number") return String(value) === String(EALA_ID);
@@ -412,32 +468,81 @@ function findDrawOpponent(event: Row, current: Row, currentRoundId: number) {
 }
 
 
-async function refreshExactMatchStart(candidate: Row) {
-  const t = tournament(candidate);
-  const group = t.tournamentGroup && typeof t.tournamentGroup === "object" ? t.tournamentGroup as Row : {};
-  const groupId = num(group.id) ?? num(t.id) ?? num(candidate.tournamentId);
-  const year = num(t.year) ?? num(candidate.tourn_year);
-  const drawSize = num(t.singlesDrawSize);
-  if (groupId === null || year === null) return;
-  try {
-    const payload = await dbHttpGetJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
-    const matches = records(payload, "matches");
-    const candidateP1 = text(candidate.player_1), candidateP2 = text(candidate.player_2), candidateRound = text(candidate.round_name);
-    const exact = matches
-      .filter(m => text(m.PlayerIDA) === String(EALA_ID) || text(m.PlayerIDB) === String(EALA_ID))
-      .map(m => ({ m, ts: text(m.MatchTimeStamp), round: roundNameFromTournamentRoundId(num(m.RoundID), drawSize) }))
-      .filter(x => x.ts && !Number.isNaN(Date.parse(x.ts)) && x.round === candidateRound)
-      .filter(x => {
-        const p1 = text(x.m.PlayerIDA), p2 = text(x.m.PlayerIDB);
-        return (p1 === candidateP1 || p1 === candidateP2 || p2 === candidateP1 || p2 === candidateP2);
-      })
-      .sort((a,b) => Date.parse(b.ts) - Date.parse(a.ts))[0];
-    if (!exact) return;
-    const merged = JSON.stringify({ MatchTimeStamp: exact.ts, Venue: exact.m.Venue ?? null });
-    await q("update public.eala_matches set match_start=$1, raw_json=raw_json || $2::jsonb, updated_at=now() where player_id=$3 and category='singles' and raw_json->>'tourn_year'=$4 and raw_json->>'round_name'=$5 and raw_json->>'player_1'=$6 and raw_json->>'player_2'=$7", [
-      exact.ts,merged,EALA_ID,String(candidate.tourn_year),candidateRound,candidateP1,candidateP2
-    ]);
-  } catch {}
+async function getPlayerMatches(type:string){
+  const matches:Row[]=[];
+  const seen=new Set<string>();
+  let previousPageSignature="";
+  for(let page=0;page<MAX_MATCH_PAGES;page++){
+    const payload=await getJson(
+      WTA+"/players/"+EALA_ID+"/matches?page="+page+"&pageSize="+MATCH_PAGE_SIZE+
+      "&id="+EALA_ID+"&year=&type="+type+"&sort=desc&tournamentGroupId="
+    );
+    const rows=records(payload,"matches");
+    if(rows.length===0)break;
+    const signature=rows.map((row,index)=>{
+      const id=num(row.id)??num(row.eventId)??num(row.event_id)??num(row.matchId);
+      return id===null?String(index)+":"+matchKey(row,type):String(id);
+    }).join(",");
+    if(page>0&&signature===previousPageSignature)break;
+    previousPageSignature=signature;
+    let newRows=0;
+    for(const row of rows){
+      const id=num(row.id)??num(row.eventId)??num(row.event_id)??num(row.matchId)??null;
+      const key=id===null?matchKey(row,type):String(id);
+      if(seen.has(key))continue;
+      seen.add(key);
+      matches.push(row);
+      newRows++;
+    }
+    if(rows.length<MATCH_PAGE_SIZE||newRows===0)break;
+  }
+  return matches;
+}
+
+async function resolveExactMatchStarts(candidates:Row[]){
+  const resolved=new Map<string,string>();
+  const groups=new Map<string,{groupId:number,year:number,drawSize:number|null,candidates:Row[]}>();
+  for(const candidate of candidates){
+    if(exactDate(candidate))continue;
+    const t=tournament(candidate);
+    const group=t.tournamentGroup&&typeof t.tournamentGroup==="object"?t.tournamentGroup as Row:{};
+    const groupId=num(group.id)??num(t.id)??num(candidate.tournamentId);
+    const year=num(t.year)??num(candidate.tourn_year);
+    const drawSize=num(t.singlesDrawSize);
+    if(groupId===null||year===null)continue;
+    const key=String(groupId)+":"+String(year);
+    const existing=groups.get(key);
+    if(existing)existing.candidates.push(candidate);
+    else groups.set(key,{groupId,year,drawSize,candidates:[candidate]});
+  }
+
+  const groupList=[...groups.values()];
+  for(let offset=0;offset<groupList.length;offset+=4){
+    await Promise.all(groupList.slice(offset,offset+4).map(async group=>{
+      try{
+        const payload=await dbHttpGetJson(WTA+"/tournaments/"+group.groupId+"/"+group.year+"/matches");
+        const matches=records(payload,"matches");
+        for(const candidate of group.candidates){
+          const candidateP1=stringValue(candidate.player_1),candidateP2=stringValue(candidate.player_2),candidateRound=text(candidate.round_name);
+          const exact=matches
+            .filter(m=>num(m.PlayerIDA)===EALA_ID||num(m.PlayerIDB)===EALA_ID)
+            .map(m=>({m,ts:text(m.MatchTimeStamp),round:roundNameFromTournamentRoundId(num(m.RoundID),group.drawSize)||text(m.round_name)||text(m.roundName)}))
+            .filter(x=>x.ts&&!Number.isNaN(Date.parse(x.ts))&&x.round===candidateRound)
+            .filter(x=>{
+              const p1=stringValue(x.m.PlayerIDA),p2=stringValue(x.m.PlayerIDB);
+              return !candidateP1&&!candidateP2||p1===candidateP1||p1===candidateP2||p2===candidateP1||p2===candidateP2;
+            })
+            .sort((a,b)=>Date.parse(b.ts)-Date.parse(a.ts))[0];
+          if(exact)resolved.set(matchKey(candidate,"singles"),exact.ts);
+        }
+      }catch(error){
+        console.error("Exact match feed refresh failed for tournament",group.groupId,group.year,error);
+      }
+    }));
+  }
+  return resolved;
+}
+
 }
 Deno.serve(async(req)=>{
   if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
