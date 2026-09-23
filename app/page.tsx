@@ -12,7 +12,6 @@ export async function generateMetadata(): Promise<Metadata> {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
   const data = await getEalaDashboardFromSupabase();
-  const odds = await getUpcomingMatchWinnerOdds(data.nextMatch);
   const latest = data.latestMatch;
   const answer = resultText(latest);
   const scores = scoreRows(latest);
@@ -200,6 +199,7 @@ function roundText(round: unknown) {
 
 export default async function Home() {
   const data = await getEalaDashboardFromSupabase();
+  const odds = await getUpcomingMatchWinnerOdds(data.nextMatch);
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
   const structuredData = {
