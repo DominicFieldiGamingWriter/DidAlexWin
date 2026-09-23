@@ -229,7 +229,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             opponent: next.opponent ?? "TBA",
             date: next.match_date
               ? new Date(next.match_date + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-              : "TBA"
+              : "TBA",
             surface: next.surface ?? "—",
             venue: next.venue ?? "—",
             tournamentStart: next.tournament_start ?? "",
