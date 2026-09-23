@@ -297,15 +297,23 @@ export default async function Home() {
           <h2 className="section-heading">Who does Alex play next?</h2>
         </div>
         <div className="upcoming-card">
-          <div>
-            <div className="section-label">NEXT MATCH</div>
-            <div className="upcoming-date upcoming-event">
+          <div className="upcoming-main">
+            <div className="upcoming-title">
+              {data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}
+            </div>
+            <div className="upcoming-event">
               {data.nextMatch
                 ? `${formatTournament(data.nextMatch.tournament)} · ${roundText(data.nextMatch.round)}`
                 : "Next tournament information unavailable"}
             </div>
-            <div className="upcoming-title">
-              {data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}
+            <div className="upcoming-meta">
+              <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
+              <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
+              <div className="upcoming-time-box">
+                <span>TIME</span>
+                <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
+                <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
+              </div>
             </div>
             {odds && (
               <div className="upcoming-odds">
@@ -315,20 +323,6 @@ export default async function Home() {
                 <strong>{odds.opponentName} {odds.opponent}</strong>
               </div>
             )}
-            <div className="upcoming-substatus">
-              {data.nextMatch?.opponent?.startsWith("Winner of ")
-                ? "Opponent to be confirmed"
-                : "Scheduled fixture"}
-            </div>
-          </div>
-          <div className="upcoming-meta">
-            <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
-            <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
-            <div className="upcoming-time-box">
-              <span>TIME</span>
-              <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
-              <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
-            </div>
           </div>
         </div>
       </section>

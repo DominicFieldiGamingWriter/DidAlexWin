@@ -1127,3 +1127,78 @@ footer {
     margin-top: 9px;
   }
 }
+
+
+/* Upcoming match: simplified hierarchy and compact metadata. */
+.upcoming-card {
+  display: block;
+}
+
+.upcoming-main {
+  width: 100%;
+}
+
+.upcoming-title {
+  margin-top: 0;
+}
+
+.upcoming-event {
+  margin-top: 8px;
+  color: #aab8cb;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.upcoming-meta {
+  margin-top: 18px;
+}
+
+.upcoming-meta > div {
+  min-height: 76px;
+  padding: 11px 13px;
+}
+
+.upcoming-meta span {
+  font-size: 8px;
+}
+
+.upcoming-meta strong {
+  margin-top: 7px;
+  font-size: 14px;
+}
+
+.upcoming-time-box strong + strong {
+  margin-top: 1px;
+}
+
+.upcoming-odds {
+  margin-top: 16px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.upcoming-odds > span {
+  color: #fcd116;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.1px;
+}
+
+.upcoming-odds strong {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.upcoming-odds b {
+  color: #7084a1;
+  font-size: 15px;
+}
+
+@media (max-width: 900px) {
+  .upcoming-meta {
+    margin-top: 16px;
+  }
+}
