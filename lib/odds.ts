@@ -130,7 +130,7 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
   const event = targetEvents[0];
   const regions = process.env.THE_ODDS_API_REGIONS ?? DEFAULT_REGIONS;
 
-  let matchWinner: UpcomingOdds["matchWinner"] = null;
+  let matchWinner: MatchWinnerOdds | null = null;
   if (event?.id) {
     const oddsParams = new URLSearchParams({
       apiKey,
