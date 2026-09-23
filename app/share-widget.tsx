@@ -45,7 +45,7 @@ export default function ShareWidget({
             rel="noopener noreferrer"
             aria-label="Share this result on Facebook"
           >
-            Facebook
+            FACEBOOK
           </a>
           <a
             className="share-button share-button-x"
@@ -54,7 +54,7 @@ export default function ShareWidget({
             rel="noopener noreferrer"
             aria-label="Share this result on X"
           >
-            X (Twitter)
+            X (TWITTER)
           </a>
         </div>
       </div>

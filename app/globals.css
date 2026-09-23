@@ -1503,3 +1503,24 @@ footer {
   outline: 2px solid #fcd116;
   outline-offset: 2px;
 }
+
+
+/* Share buttons: use a much lighter surface against the dark share card. */
+.share-widget .share-button {
+  background: #f3f6f8;
+  border: 1px solid #dfe4ea;
+  color: #111a29;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.share-widget .share-button:hover {
+  background: #ffffff;
+  border-color: #fcd116;
+  color: #111a29;
+}
+
+.share-widget .share-button:focus-visible {
+  outline: 2px solid #fcd116;
+  outline-offset: 2px;
+}
