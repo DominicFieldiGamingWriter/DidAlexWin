@@ -206,6 +206,10 @@ async function sync(){
           if(aa!==ba)return aa?-1:1;
           return Date.parse(a.start)-Date.parse(b.start);
         });
+        await q("update public.eala_sync_runs set error_message=$1 where id=$2",[JSON.stringify({
+          phase1_discovery_candidates:upcomingTournaments.length,
+          phase1_discovery_tournaments:upcomingTournaments.slice(0,20).map(x=>({id:x.groupId,year:x.year,title:x.title,start:x.start,end:x.end,draw:x.drawSize}))
+        }),runId]);
 
         let placeholder:Row|null=null,placeholderDrawPayload:unknown=null,placeholderMatchPayload:unknown=null,successfulChecks=0;
         for(let batchStart=0;batchStart<upcomingTournaments.length;batchStart+=8){
