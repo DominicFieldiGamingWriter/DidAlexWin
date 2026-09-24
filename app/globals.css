@@ -1524,3 +1524,16 @@ footer {
   outline: 2px solid #fcd116;
   outline-offset: 2px;
 }
+
+/* Upcoming match time: separate UTC and Philippines boxes. */
+.upcoming-card .upcoming-meta {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.upcoming-card .upcoming-time-box strong {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .upcoming-card .upcoming-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
