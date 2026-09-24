@@ -323,12 +323,12 @@ export default async function Home() {
               <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
               <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
               <div className="upcoming-time-box">
-                <span>UTC</span>
-                <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
-              </div>
-              <div className="upcoming-time-box">
                 <span>PH TIME</span>
                 <strong>{data.nextMatch?.matchTimePhilippines ?? "TBA"}</strong>
+              </div>
+              <div className="upcoming-time-box">
+                <span>UTC</span>
+                <strong>{data.nextMatch?.matchTime ?? "TBA"}</strong>
               </div>
             </div>
           </div>
