@@ -317,13 +317,6 @@ export default async function Home() {
             <div className="upcoming-event">
               {data.nextMatch ? formatTournament(data.nextMatch.tournament) : "Next tournament information unavailable"}
             </div>
-            {data.nextMatch && (
-              <div className="match-date upcoming-dates">
-                {data.nextMatch.tournamentStart && data.nextMatch.tournamentEnd
-                  ? `${formatDate(data.nextMatch.tournamentStart)} – ${formatDate(data.nextMatch.tournamentEnd)}`
-                  : data.nextMatch.date}
-              </div>
-            )}
             <div className="upcoming-meta">
               <div><span>DATE</span><strong>{data.nextMatch?.date ?? "—"}</strong></div>
               <div><span>ROUND</span><strong>{data.nextMatch?.round ? roundText(data.nextMatch.round) : "—"}</strong></div>
