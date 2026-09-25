@@ -270,7 +270,30 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
                     month: "short",
                     year: "numeric",
                   })
-                : "TBA",
+                : next.tournament_start
+                  ? (() => {
+                      const start = new Date(next.tournament_start);
+                      const end = next.tournament_end ? new Date(next.tournament_end) : null;
+                      if (Number.isNaN(start.getTime())) return "TBA";
+                      const startText = start.toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      });
+                      if (!end || Number.isNaN(end.getTime())) {
+                        return start.toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        });
+                      }
+                      const endText = end.toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      });
+                      return startText + " – " + endText;
+                    })()
+                  : "TBA",
             surface: next.surface ?? "—",
             venue: next.venue ?? "—",
             tournamentStart: next.tournament_start ?? "",
