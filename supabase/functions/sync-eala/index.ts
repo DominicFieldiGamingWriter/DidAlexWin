@@ -198,7 +198,90 @@ async function dbHttpGetJson(url: string) {
   return JSON.parse(raw);
 }
 
+
+const SYNC_INTERVAL_12_HOURS = 12 * 60 * 60 * 1000;
+const SYNC_INTERVAL_1_HOUR = 60 * 60 * 1000;
+const SYNC_INTERVAL_15_MINUTES = 15 * 60 * 1000;
+
+async function syncSchedule() {
+  const now = Date.now();
+  const [nextRows, latestRows, lastRows] = await Promise.all([
+    q(
+      "select match_start, tournament_start, tournament_end from public.eala_next_match where player_id=$1 limit 1",
+      [EALA_ID]
+    ),
+    q(
+      "select coalesce(match_start, match_date::timestamptz) as latest_at from public.eala_matches where player_id=$1 and category='singles' and eala_won is not null order by coalesce(match_start, match_date::timestamptz) desc nulls last limit 1",
+      [EALA_ID]
+    ),
+    q(
+      "select started_at from public.eala_sync_runs where success=true order by started_at desc limit 1"
+    )
+  ]);
+
+  const next = nextRows[0] as Row | undefined;
+  const latest = latestRows[0] as Row | undefined;
+  const last = lastRows[0] as Row | undefined;
+
+  const nextStart = next?.match_start ? Date.parse(String(next.match_start)) : NaN;
+  const tournamentStart = next?.tournament_start ? Date.parse(String(next.tournament_start)) : NaN;
+  const tournamentEnd = next?.tournament_end ? Date.parse(String(next.tournament_end)) : NaN;
+  const latestAt = latest?.latest_at ? Date.parse(String(latest.latest_at)) : NaN;
+
+  const imminentMatch =
+    Number.isFinite(nextStart) &&
+    nextStart >= now - 6 * 60 * 60 * 1000 &&
+    nextStart <= now + 24 * 60 * 60 * 1000;
+
+  const recentMatch =
+    Number.isFinite(latestAt) &&
+    latestAt >= now - 6 * 60 * 60 * 1000 &&
+    latestAt <= now;
+
+  const tournamentActive =
+    Number.isFinite(tournamentStart) &&
+    Number.isFinite(tournamentEnd) &&
+    tournamentStart <= now &&
+    tournamentEnd >= now - 6 * 60 * 60 * 1000;
+
+  let interval = SYNC_INTERVAL_12_HOURS;
+  let mode = "idle";
+
+  if (imminentMatch || recentMatch) {
+    interval = SYNC_INTERVAL_15_MINUTES;
+    mode = "match_window";
+  } else if (tournamentActive) {
+    interval = SYNC_INTERVAL_1_HOUR;
+    mode = "tournament";
+  }
+
+  const lastSync = last?.started_at ? Date.parse(String(last.started_at)) : NaN;
+  const due =
+    !Number.isFinite(lastSync) ||
+    now - lastSync >= interval;
+
+  return {
+    due,
+    mode,
+    interval,
+    intervalMinutes: interval / 60000,
+    lastSync: Number.isFinite(lastSync) ? String(last.started_at) : null
+  };
+}
+
 async function sync(){
+  const schedule = await syncSchedule();
+  if (!schedule.due) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "not_due",
+      mode: schedule.mode,
+      intervalMinutes: schedule.intervalMinutes,
+      lastSync: schedule.lastSync
+    };
+  }
+
   const lock=await q("select pg_try_advisory_lock($1) as locked",[SYNC_LOCK_KEY]);
   if(lock[0]?.locked !== true)return {skipped:true,reason:"sync_locked"};
   let runId:number|null=null;
