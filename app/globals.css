@@ -865,6 +865,15 @@ footer {
   font-size: 9px;
   line-height: 1.35;
 }
+
+.form-match-info .form-tournament {
+  margin-top: 8px;
+}
+
+.form-match-info .form-date {
+  margin-top: 2px;
+  white-space: nowrap;
+}
 .upcoming-event {
   margin-top: 10px;
   color: #aab8cb;

@@ -396,7 +396,8 @@ export default async function Home() {
                   <div className="form-match-info">
                     <strong className="form-first-name">{name.first}</strong>
                     {name.surname && <strong className="form-surname">{name.surname}</strong>}
-                    <span>{formatTournament(match.tournament)} · {match.date}</span>
+                    <span className="form-tournament">{formatTournament(match.tournament)}</span>
+                    <span className="form-date">{match.date}</span>
                     {match.score && <small className="form-score">{match.score}</small>}
                   </div>
                 </div>
