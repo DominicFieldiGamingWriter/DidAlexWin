@@ -29,6 +29,21 @@ export default function ShareWidget({
     "https://www.facebook.com/sharer/sharer.php?u=" +
     encodeURIComponent(siteUrl);
 
+  function trackShare(platform: "facebook" | "x") {
+    if (typeof window === "undefined") return;
+
+    const gtag = (window as typeof window & {
+      gtag?: (command: string, action: string, params?: Record<string, unknown>) => void;
+    }).gtag;
+
+    gtag?.("event", "share_click", {
+      platform,
+      result,
+      tournament,
+      round,
+    });
+  }
+
   return (
     <section className="share-section" aria-labelledby="share-widget-title">
       <div className="share-widget">
@@ -44,6 +59,7 @@ export default function ShareWidget({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Share this result on Facebook"
+            onClick={() => trackShare("facebook")}
           >
             FACEBOOK
           </a>
@@ -53,6 +69,7 @@ export default function ShareWidget({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Share this result on X"
+            onClick={() => trackShare("x")}
           >
             X (TWITTER)
           </a>
