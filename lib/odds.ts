@@ -99,7 +99,7 @@ async function resolveSportKey(tournament: string, apiKey: string): Promise<stri
       const combined=normaliseName(s.title+" "+(s.description??""));
       const overlap=tokens.filter(t=>combined.includes(normaliseName(t))).length;
       const titleNorm=normaliseName(s.title), targetNorm=normaliseName(tournament);
-      const exact=targetNorm&&(targetNorm.includes(titleNorm)||titleNorm.includes(targetNorm))?100:0;
+      const exact=targetNorm.length>0 && (targetNorm.includes(titleNorm)||titleNorm.includes(targetNorm)) ? 100 : 0;
       return {sport:s,score:exact+overlap*10};
     }).sort((a,b)=>b.score-a.score);
   const best=candidates[0];
