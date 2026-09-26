@@ -30,7 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const title =
     answer === "YES"
       ? "Alex Eala won! She beat " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round
-      : "Alex Eala loses to " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round;
+      : answer === "NO"
+        ? "Alex Eala lost to " + opponent + (score ? " " + score : "") + " at the " + tournament + ", " + round
+        : "Alex Eala latest match result and upcoming schedule";
 
   return {
     openGraph: {
@@ -229,6 +231,7 @@ export default async function Home() {
   };
   const latest = data.latestMatch;
   const answer = resultText(latest);
+  const hasResult = answer === "YES" || answer === "NO";
   const won = answer === "YES";
   const scores = scoreRows(latest);
   const tournament = latest?.tournament as Record<string, unknown> | undefined;
@@ -274,8 +277,8 @@ export default async function Home() {
               <div className="match-title">{latest?.TournamentName ? formatTournament(latest.TournamentName) : "Waiting for Eala match data"}</div>
               <div className="match-date">{latest ? formatDateRange(tournament?.startDate ?? latest.StartDate, tournament?.endDate) : "Automatically updated"}</div>
               <div className="match-summary">
-                <span className={`match-outcome ${won ? "win" : "loss"}`}>{won ? "WIN" : "LOSS"}</span>
-                <span className="match-played-date">{latest?.MatchTimeStamp || latest?.matchDate || latest?.match_start ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate ?? latest.match_start)}` : "Match date unavailable"}</span>
+                {hasResult && <span className={`match-outcome ${won ? "win" : "loss"}`}>{won ? "WIN" : "LOSS"}</span>}
+                <span className="match-played-date">{hasResult && (latest?.MatchTimeStamp || latest?.matchDate || latest?.match_start) ? `Played ${formatDateTimeShort(latest.MatchTimeStamp ?? latest.matchDate ?? latest.match_start)}` : hasResult ? "Match date unavailable" : "Result unavailable"}</span>
               </div>
             </div>
             <div className="match-details match-details-top">
@@ -286,12 +289,12 @@ export default async function Home() {
           </div>
           <div className="scoreboard">
             <div className="scoreboard-head"><span></span><span>SET 1</span><span>SET 2</span><span>SET 3</span></div>
-            <div className={`score-row ${won ? "score-row-winner" : ""}`}>
-              <div className="score-player"><strong>Alexandra Eala</strong>{won && latest && <span className="winner-tag">WINNER</span>}</div>
+            <div className={`score-row ${hasResult && won ? "score-row-winner" : ""}`}>
+              <div className="score-player"><strong>Alexandra Eala</strong>{hasResult && won && latest && <span className="winner-tag">WINNER</span>}</div>
               {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.eala[index] ?? "—"}</strong>)}
             </div>
-            <div className={`score-row ${won ? "" : "score-row-winner"}`}>
-              <div className="score-player"><strong>{latestOpponent(latest)}</strong>{!won && latest && <span className="winner-tag">WINNER</span>}</div>
+            <div className={`score-row ${hasResult && !won ? "score-row-winner" : ""}`}>
+              <div className="score-player"><strong>{latestOpponent(latest)}</strong>{hasResult && !won && latest && <span className="winner-tag">WINNER</span>}</div>
               {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.opponent[index] ?? "—"}</strong>)}
             </div>
           </div>
@@ -464,7 +467,7 @@ export default async function Home() {
       <section className="career-card">
         <div className="career-heading-row">
           <div>
-            <h2 className="section-title">2026 SEASON RECORD</h2>
+            <h2 className="section-title">{new Date().getUTCFullYear()} SEASON RECORD</h2>
           </div>
           <span className="stats-updated">Last updated at {formatDateTime(data.lastUpdated)}</span>
         </div>

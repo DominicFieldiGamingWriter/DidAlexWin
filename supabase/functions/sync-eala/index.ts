@@ -92,193 +92,279 @@ function nameMatches(candidate: string, feedLast: string) {
   return c.split(" ").includes(f) || f.split(" ").includes(c);
 }
 
-const ASIAN_GAMES_START = Date.parse("2026-09-26T00:00:00+09:00");
-const ASIAN_GAMES_END = Date.parse("2026-10-04T23:59:59+09:00");
 const ASIAN_GAMES_BASE = "https://back.results.asiangames2026.org/s/AG2026/en/TEN";
 const ASIAN_GAMES_EVENT = "W.SINGLES-----------";
-const ASIAN_GAMES_EALA_REG = "9000172";
+
+type NextMatchCandidate = {
+  source: string;
+  tournament: string;
+  roundName: string;
+  opponent: string;
+  matchDate: string | null;
+  matchStart: string | null;
+  confidence: "match" | "event";
+  tournamentStart: string | null;
+  tournamentEnd: string | null;
+  surface: string | null;
+  venue: string | null;
+  sourceEventId: number | null;
+  rawJson: Record<string, unknown>;
+};
+
+function candidateStart(candidate: NextMatchCandidate): number {
+  for(const value of [candidate.matchStart,candidate.matchDate,candidate.tournamentStart]){
+    if(value&&Number.isFinite(Date.parse(value)))return Date.parse(value);
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function candidateEnd(candidate: NextMatchCandidate): number {
+  for(const value of [candidate.tournamentEnd,candidate.matchStart,candidate.tournamentStart]){
+    if(value&&Number.isFinite(Date.parse(value)))return Date.parse(value);
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function candidateIsRelevant(candidate: NextMatchCandidate,now=Date.now()): boolean {
+  const end=candidateEnd(candidate);
+  return end===Number.MAX_SAFE_INTEGER||end>=now-6*60*60*1000;
+}
+
+function selectNextMatchCandidate(candidates: NextMatchCandidate[],now=Date.now()): NextMatchCandidate|null {
+  return candidates
+    .filter(candidate=>candidateIsRelevant(candidate,now))
+    .sort((a,b)=>{
+      const byDate=candidateStart(a)-candidateStart(b);
+      if(byDate!==0)return byDate;
+      if(a.confidence==="match"&&b.confidence!=="match")return -1;
+      if(a.confidence!=="match"&&b.confidence==="match")return 1;
+      return 0;
+    })[0]??null;
+}
 
 async function getBornanJson(url:string) {
-  const r = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "DidAlexWin/1.0"
-    },
-    signal: AbortSignal.timeout(15000)
+  const r=await fetch(url,{
+    headers:{Accept:"application/json","User-Agent":"DidAlexWin/1.0"},
+    signal:AbortSignal.timeout(15000)
   });
-  if (!r.ok) throw new Error("Bornan API returned " + r.status);
-  const bytes = new Uint8Array(await r.arrayBuffer());
-  const direct = new TextDecoder().decode(bytes);
-  try {
-    return JSON.parse(direct);
-  } catch {}
+  if(!r.ok)throw new Error("Bornan API returned "+r.status);
 
-  for (const format of ["deflate", "gzip", "deflate-raw"] as const) {
-    try {
-      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
-      const decoded = await new Response(stream).text();
+  const body=await r.text();
+  try{return JSON.parse(body);}catch{}
+
+  // Bornan sometimes returns compressed bytes encoded as a Latin-1-style
+  // JavaScript string. Reconstruct the original byte values before inflating.
+  const encodedBytes=Uint8Array.from(Array.from(body,ch=>ch.charCodeAt(0)&255));
+
+  for(const format of ["deflate","gzip","deflate-raw"] as const){
+    try{
+      const stream=new Blob([encodedBytes]).stream().pipeThrough(new DecompressionStream(format));
+      const decoded=await new Response(stream).text();
       return JSON.parse(decoded);
-    } catch {}
+    }catch{}
   }
+
+  // Keep a raw-byte fallback for deployments where the response is actually binary.
+  const rawBytes=new Uint8Array(await new Response(body).arrayBuffer());
+  for(const format of ["deflate","gzip","deflate-raw"] as const){
+    try{
+      const stream=new Blob([rawBytes]).stream().pipeThrough(new DecompressionStream(format));
+      const decoded=await new Response(stream).text();
+      return JSON.parse(decoded);
+    }catch{}
+  }
+
   throw new Error("Bornan response could not be decoded");
 }
 
-function asianContainsEala(value: unknown): boolean {
-  if (typeof value === "string") {
-    const v = value.toUpperCase();
-    return v === ASIAN_GAMES_EALA_REG || /\bEALA\b/.test(v);
-  }
-  if (typeof value === "number") return String(value) === ASIAN_GAMES_EALA_REG;
-  if (Array.isArray(value)) return value.some(asianContainsEala);
-  if (value && typeof value === "object") return Object.values(value as Row).some(asianContainsEala);
+function asianContainsEala(value:unknown):boolean {
+  if(typeof value==="string")return /\bEALA\b/i.test(value);
+  if(Array.isArray(value))return value.some(asianContainsEala);
+  if(value&&typeof value==="object")return Object.values(value as Row).some(asianContainsEala);
   return false;
 }
 
-function asianText(value: unknown): string {
-  if (typeof value === "string" && value.trim()) return value.trim();
+function asianText(value:unknown):string {
+  if(typeof value==="string"&&value.trim())return value.trim();
   return "";
 }
 
-function asianSideName(side: unknown): string {
-  if (!side) return "";
-  if (typeof side === "string") return side.trim();
-  if (Array.isArray(side)) {
-    for (const item of side) {
-      const name = asianSideName(item);
-      if (name && !/\bEALA\b/i.test(name)) return name;
+function asianSideName(side:unknown):string {
+  if(!side)return "";
+  if(typeof side==="string")return side.trim();
+  if(Array.isArray(side)){
+    for(const item of side){
+      const name=asianSideName(item);
+      if(name&&!/\bEALA\b/i.test(name))return name;
     }
     return "";
   }
-  if (typeof side === "object") {
-    const o = side as Row;
-    for (const key of ["Name","PTDisplayLine","PlayerDisplayLine","fullName","name","Desc","DescA","DescS"]) {
-      const value = asianText(o[key]);
-      if (value && !/\bEALA\b/i.test(value)) return value;
+  if(typeof side==="object"){
+    const o=side as Row;
+    for(const key of ["Name","PTDisplayLine","PlayerDisplayLine","fullName","name","Desc","DescA","DescS"]){
+      const value=asianText(o[key]);
+      if(value&&!/\bEALA\b/i.test(value))return value;
     }
-    const player = o.Player;
-    if (player && typeof player === "object") {
-      const p = player as Row;
-      const name = [asianText(p.FirstName), asianText(p.SurName)].filter(Boolean).join(" ");
-      if (name && !/\bEALA\b/i.test(name)) return name;
+    const player=o.Player;
+    if(player&&typeof player==="object"){
+      const p=player as Row;
+      const name=[asianText(p.FirstName),asianText(p.SurName)].filter(Boolean).join(" ");
+      if(name&&!/\bEALA\b/i.test(name))return name;
     }
-    for (const value of Object.values(o)) {
-      const name = asianSideName(value);
-      if (name && !/\bEALA\b/i.test(name)) return name;
+    for(const value of Object.values(o)){
+      const name=asianSideName(value);
+      if(name&&!/\bEALA\b/i.test(name))return name;
     }
   }
   return "";
 }
 
-function asianMatchTimestamp(match: Row): string {
-  const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
-  for (const v of [
-    info.DateTimeRaw, info.MatchTimeStamp, match.DateTimeRaw, match.MatchTimeStamp,
-    info.StartTime, match.StartTime
-  ]) {
-    const s = asianText(v);
-    if (s && !Number.isNaN(Date.parse(s))) return s;
+function asianMatchTimestamp(match:Row):string {
+  const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
+  for(const v of [info.DateTimeRaw,info.MatchTimeStamp,match.DateTimeRaw,match.MatchTimeStamp,info.StartTime,match.StartTime]){
+    const s=asianText(v);
+    if(s&&!Number.isNaN(Date.parse(s)))return s;
   }
   return "";
 }
 
-function asianMatchCompleted(match: Row): boolean {
-  const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
-  if (info.Last === true || match.Last === true) return true;
-  const status = (asianText(info.Status) || asianText(match.Status)).toUpperCase();
-  return status === "OFFICIAL" || status === "UNOFFICIAL" || status === "FINISHED";
+function asianMatchCompleted(match:Row):boolean {
+  const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
+  if(info.Last===true||match.Last===true)return true;
+  const status=(asianText(info.Status)||asianText(match.Status)).toUpperCase();
+  return status==="OFFICIAL"||status==="UNOFFICIAL"||status==="FINISHED";
 }
 
-function collectAsianBracketMatches(value: unknown, out: Row[] = []): Row[] {
-  if (Array.isArray(value)) {
-    for (const item of value) collectAsianBracketMatches(item, out);
-    return out;
+function collectAsianBracketMatches(value:unknown,out:Row[]=[],seen=new Set<string>()):Row[]{
+  if(Array.isArray(value)){for(const item of value)collectAsianBracketMatches(item,out,seen);return out;}
+  if(!value||typeof value!=="object")return out;
+  const o=value as Row;
+  if(("Home" in o||"Away" in o)&&(asianContainsEala(o.Home)||asianContainsEala(o.Away)||asianContainsEala(o.Competitors))){
+    const info=o.Info&&typeof o.Info==="object"?o.Info as Row:{};
+    const key=asianText(info.Key)||asianText(o.Key);
+    if(!key||!seen.has(key)){if(key)seen.add(key);out.push(o);}
   }
-  if (!value || typeof value !== "object") return out;
-  const o = value as Row;
-  const looksLikeMatch = "Home" in o || "Away" in o;
-  if (looksLikeMatch && (asianContainsEala(o.Home) || asianContainsEala(o.Away) || asianContainsEala(o.Competitors))) {
-    out.push(o);
-  }
-  for (const item of Object.values(o)) collectAsianBracketMatches(item, out);
+  for(const item of Object.values(o))collectAsianBracketMatches(item,out,seen);
   return out;
 }
 
-async function syncAsianGamesNextMatch(): Promise<boolean> {
-  const now = Date.now();
-  if (now < ASIAN_GAMES_START || now > ASIAN_GAMES_END) return false;
-
-  try {
-    const bracketPayload = await getBornanJson(
-      ASIAN_GAMES_BASE + "/brackets/" + ASIAN_GAMES_EVENT
-    );
-    const bracketMatches = collectAsianBracketMatches(bracketPayload)
-      .filter(match => !asianMatchCompleted(match))
-      .map(match => {
-        const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
-        const ealaHome = asianContainsEala(match.Home);
-        const opponentSide = ealaHome ? match.Away : match.Home;
-        const opponentName = asianSideName(opponentSide);
-        return {
-          match,
-          opponent: opponentName || "TBA",
-          start: asianMatchTimestamp(match),
-          round: asianText(info.PhaseDescA) || asianText(info.PhaseDesc) || asianText(match.PhaseDescA) || asianText(match.PhaseDesc) || "TBA",
-          venue: asianText(info.VenueDesc) || asianText(match.VenueDesc) || "Nagoya City Higashiyama Park Tennis Center"
-        };
-      })
-      .filter(item => !item.start || Date.parse(item.start) >= now - 6 * 60 * 60 * 1000)
-      .sort((a,b) => {
-        const ad = a.start ? Date.parse(a.start) : Number.MAX_SAFE_INTEGER;
-        const bd = b.start ? Date.parse(b.start) : Number.MAX_SAFE_INTEGER;
-        return ad - bd;
-      });
-
-    if (bracketMatches.length) {
-      const next = bracketMatches[0];
-      const scheduledDate = next.start ? dateOnly(next.start) : "2026-09-28";
-      await q(
-        "insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",
-        [EALA_ID,"Asian Games 2026",next.round,next.opponent,next.start||null,null,next.venue,"2026-09-27","2026-10-03",null,JSON.stringify({source:"Bornan official Aichi-Nagoya 2026 bracket",event:ASIAN_GAMES_EVENT,scheduled_date:scheduledDate})]
-      );
-      return true;
+function asianScheduleRows(payload:unknown):Row[]{
+  const out:Row[]=[];
+  const walk=(value:unknown)=>{
+    if(Array.isArray(value)){
+      for(const item of value)walk(item);
+      return;
     }
-  } catch (error) {
-    console.error("Asian Games bracket lookup failed:", error);
-  }
+    if(!value||typeof value!=="object")return;
+    const o=value as Row;
+    if("DateTimeRaw" in o||"MatchTimeStamp" in o)out.push(o);
+    for(const item of Object.values(o))walk(item);
+  };
+  walk(payload);
+  return out;
+}
 
-  try {
-    const entries = await getBornanJson(ASIAN_GAMES_BASE + "/entries/event/" + ASIAN_GAMES_EVENT);
-    const participants = Array.isArray(entries?.Partics) ? entries.Partics : [];
-    if (!participants.some((item: Row) => String(item.Reg) === ASIAN_GAMES_EALA_REG)) return false;
+function asianEventWindow(rows:Row[]){
+  const timestamps=rows
+    .map(row=>asianText(row.DateTimeRaw)||asianText(row.MatchTimeStamp))
+    .filter(value=>value&&Number.isFinite(Date.parse(value)))
+    .map(value=>Date.parse(value));
+  const futureOrCurrent=rows
+    .filter(row=>{
+      const value=asianText(row.DateTimeRaw)||asianText(row.MatchTimeStamp);
+      return value&&Number.isFinite(Date.parse(value))&&Date.parse(value)>=Date.now()-6*60*60*1000;
+    })
+    .sort((a,b)=>Date.parse(asianText(a.DateTimeRaw)||asianText(a.MatchTimeStamp))-Date.parse(asianText(b.DateTimeRaw)||asianText(b.MatchTimeStamp)));
+  const start=timestamps.length?new Date(Math.min(...timestamps)).toISOString():null;
+  const end=timestamps.length?new Date(Math.max(...timestamps)).toISOString():null;
+  const nextSlot=futureOrCurrent[0]??null;
+  return {start,end,nextSlot,nextSlotAt:nextSlot?(asianText(nextSlot.DateTimeRaw)||asianText(nextSlot.MatchTimeStamp)):null};
+}
 
-    await q(
-      "insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",
-      [
-        EALA_ID,
-        "Asian Games 2026",
-        "Second Round",
-        "Winner of Patcharin Cheapchandej / Mahin Aftab Qureshi",
-        null,
-        null,
-        "Nagoya City Higashiyama Park Tennis Center",
-        "2026-09-27",
-        "2026-10-03",
-        null,
-        JSON.stringify({
-          source: "PHILTA draw reported September 25, 2026",
-          event: ASIAN_GAMES_EVENT,
-          first_round_bye: true,
-          opponent_path: ["Patcharin Cheapchandej", "Mahin Aftab Qureshi"],
-          scheduled_date: "2026-09-28"
+function asianEntryIsEala(entry:Row):boolean {
+  const name=asianText(entry.Name);
+  const first=asianText(entry.FirstName);
+  const last=asianText(entry.SurName);
+  return /\bEALA\b/i.test(name)||/\bEALA\b/i.test([first,last].filter(Boolean).join(" "));
+}
+
+async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
+  try{
+    const entries=await getBornanJson(ASIAN_GAMES_BASE+"/entries/event/"+ASIAN_GAMES_EVENT);
+    if(!asianContainsEala(entries))return null;
+
+    const schedulePayload=await getBornanJson(ASIAN_GAMES_BASE+"/schedule/event/"+ASIAN_GAMES_EVENT);
+    const scheduleRows=asianScheduleRows(schedulePayload);
+    const window=asianEventWindow(scheduleRows);
+    const venue=window.nextSlot
+      ? asianText(window.nextSlot.VenueDesc)||
+        (window.nextSlot.Venue&&typeof window.nextSlot.Venue==="object"?asianText((window.nextSlot.Venue as Row).Desc):"")
+      : "";
+
+    try{
+      const bracketPayload=await getBornanJson(ASIAN_GAMES_BASE+"/brackets/"+ASIAN_GAMES_EVENT);
+      const bracketMatches=collectAsianBracketMatches(bracketPayload)
+        .filter(match=>!asianMatchCompleted(match))
+        .map(match=>{
+          const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
+          const ealaHome=asianContainsEala(match.Home);
+          const opponentName=asianSideName(ealaHome?match.Away:match.Home);
+          const start=asianMatchTimestamp(match);
+          return {
+            opponent:opponentName||"TBA",
+            start,
+            round:asianText(info.PhaseDescA)||asianText(info.PhaseDesc)||asianText(match.PhaseDescA)||asianText(match.PhaseDesc)||"TBA",
+            venue:asianText(info.VenueDesc)||asianText(match.VenueDesc)||venue||null
+          };
         })
-      ]
-    );
-    return true;
-  } catch (error) {
-    console.error("Asian Games fallback lookup failed:", error);
-    return false;
+        .filter(item=>!item.start||Date.parse(item.start)>=Date.now()-6*60*60*1000)
+        .sort((a,b)=>(a.start?Date.parse(a.start):Number.MAX_SAFE_INTEGER)-(b.start?Date.parse(b.start):Number.MAX_SAFE_INTEGER));
+
+      if(bracketMatches.length){
+        const next=bracketMatches[0];
+        return {
+          source:"bornan:asian-games",
+          tournament:"Asian Games 2026",
+          roundName:next.round,
+          opponent:next.opponent,
+          matchDate:next.start?dateOnly(next.start)||null:null,
+          matchStart:next.start||null,
+          confidence:"match",
+          tournamentStart:window.start,
+          tournamentEnd:window.end,
+          surface:null,
+          venue:next.venue,
+          sourceEventId:null,
+          rawJson:{source:"Bornan official Aichi-Nagoya 2026 results",event:ASIAN_GAMES_EVENT,bracket_resolved:true,schedule_window:{start:window.start,end:window.end}}
+        };
+      }
+    }catch(error){
+      console.error("Asian Games bracket lookup failed:",error);
+    }
+
+    // The source confirms that Eala is entered and the event is scheduled.
+    // No opponent or exact match date is invented until the live competition feed exposes it.
+    return {
+      source:"bornan:asian-games",
+      tournament:"Asian Games 2026",
+      roundName:"TBA",
+      opponent:"TBA",
+      matchDate:null,
+      matchStart:null,
+      confidence:"event",
+      tournamentStart:window.start,
+      tournamentEnd:window.end,
+      surface:null,
+      venue:venue||null,
+      sourceEventId:null,
+      rawJson:{source:"Bornan official Aichi-Nagoya 2026 results",event:ASIAN_GAMES_EVENT,bracket_resolved:false,schedule_derived:true,next_scheduled_slot:window.nextSlotAt}
+    };
+  }catch(error){
+    console.error("Asian Games candidate lookup failed:",error);
+    return null;
   }
 }
+
 
 async function getJson(url:string){ const r=await fetch(url,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(15000)}); if(!r.ok)throw new Error("WTA API returned "+r.status); return r.json(); }
 async function getRanking(type:string,metric:string){
@@ -433,17 +519,25 @@ async function syncSchedule() {
     tournamentStart <= now &&
     tournamentEnd >= now - 6 * 60 * 60 * 1000;
 
-  const asianGamesActive = now >= ASIAN_GAMES_START && now <= ASIAN_GAMES_END;
+  const tournamentImminent =
+    Number.isFinite(tournamentStart) &&
+    tournamentStart > now &&
+    tournamentStart <= now + 24 * 60 * 60 * 1000;
+
+  const tournamentRecentlyEnded =
+    Number.isFinite(tournamentEnd) &&
+    tournamentEnd < now &&
+    tournamentEnd >= now - 12 * 60 * 60 * 1000;
 
   let interval = SYNC_INTERVAL_12_HOURS;
   let mode = "idle";
 
-  if (imminentMatch || recentMatch) {
-    interval = SYNC_INTERVAL_15_MINUTES;
-    mode = "match_window";
-  } else if (tournamentActive || asianGamesActive) {
-    interval = SYNC_INTERVAL_1_HOUR;
-    mode = asianGamesActive ? "asian_games" : "tournament";
+  if(imminentMatch||recentMatch){
+    interval=SYNC_INTERVAL_15_MINUTES;
+    mode="match_window";
+  }else if(tournamentActive||tournamentImminent||tournamentRecentlyEnded){
+    interval=SYNC_INTERVAL_1_HOUR;
+    mode=tournamentActive?"tournament":tournamentImminent?"upcoming_event":"recent_event";
   }
 
   const lastSync = last?.started_at ? Date.parse(String(last.started_at)) : NaN;
@@ -524,154 +618,67 @@ async function sync(){
       if(rank>current || (rank===current && year!==null && (currentYear===null || Number(year)>Number(currentYear)))){ bestRank[key]=rank; grandSlams[key].best=bestLabel(m); grandSlams[key].bestYear=year===null?null:Number(year); }
     }
     await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
-    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
-    const upcoming=singles.filter(m=>!completed(m)&&text(m.player_2)!=="BYE").map(m=>({m,d:knownMatchDate(m),start:matchStart(m)})).filter(x=>x.d&&Date.parse(x.d+"T23:59:59Z")>=Date.now()-3600000).sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
-    const asianGamesHandled=await syncAsianGamesNextMatch();
-    if(asianGamesHandled){}else if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify({...m,scheduled_date:upcoming.d||null})]);}
-    else {
-      try {
-        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const tournamentPayload = await getJson(
-          WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to
-        );
-        const upcomingTournaments = records(tournamentPayload)
-          .map(item => {
-            const group = item.tournamentGroup && typeof item.tournamentGroup === "object" ? item.tournamentGroup as Row : {};
-            return {
-              groupId: num(group.id),
-              year: num(item.year),
-              start: text(item.startDate),
-              end: text(item.endDate),
-              title: text(item.title),
-              surface: text(item.surface)
-            };
-          })
-          .filter(item => {
-            const now = Date.now();
-            const starts = Date.parse(item.start);
-            const ends = Date.parse(item.end);
-            if (item.groupId === null || item.year === null || !Number.isFinite(starts) || !Number.isFinite(ends)) return false;
-            // Include tournaments that are already in progress as well as
-            // tournaments starting in the next 60 days. The previous 36-hour
-            // start-date window incorrectly skipped Singapore after it had
-            // been underway for more than 36 hours.
-            return ends >= now - 6 * 60 * 60 * 1000 && starts <= now + 60 * 24 * 60 * 60 * 1000;
-          })
-          .sort((a,b) => {
-            const now = Date.now();
-            const aActive = Date.parse(a.start) <= now && Date.parse(a.end) >= now;
-            const bActive = Date.parse(b.start) <= now && Date.parse(b.end) >= now;
-            if (aActive !== bActive) return aActive ? -1 : 1;
-            return Date.parse(a.start)-Date.parse(b.start);
-          });
+    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),highest_doubles_ranking=least(coalesce(public.eala_stats.highest_doubles_ranking,excluded.highest_doubles_ranking),excluded.highest_doubles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
+    const upcoming=singles
+      .filter(m=>!completed(m)&&text(m.player_2)!=="BYE")
+      .map(m=>({m,d:knownMatchDate(m),start:matchStart(m)}))
+      .filter(x=>x.d&&Date.parse(x.d+"T23:59:59Z")>=Date.now()-3600000)
+      .sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
 
-        let placeholder: Row | null = null;
-        let placeholderDrawPayload: unknown = null;
-        for (const t of upcomingTournaments.slice(0, 8)) {
-          if (t.groupId === null || t.year === null) continue;
-          try {
-            const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
-            const drawEvent = drawEvents(drawPayload).find(event =>
-              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
-            );
-            if (drawEvent) {
-              const lines = ((drawEvent.Draw as Row | undefined)?.DrawLine);
-              const hasEala = Array.isArray(lines) && lines.some(line =>
-                !!line && typeof line === "object" && playerIdsMatch((line as Row).Players)
-              );
-              if (hasEala) {
-                placeholder = t as Row;
-                placeholderDrawPayload = drawPayload;
-                break;
-              }
-            }
-          } catch {}
-          try {
-            const payload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
-            const players = records(payload,"players").length ? records(payload,"players") : records(payload);
-            if (players.some(playerIdsMatch)) {
-              placeholder = t as Row;
-              break;
-            }
-          } catch {}
-        }
+    const candidates:NextMatchCandidate[]=[];
 
-        if (placeholder) {
-          let tournamentRecord: { tournament:string; roundName:string; opponent:string; matchStart:string|null; source:Record<string,unknown> } = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null, source: {source:"WTA tournament entry",entry_confirmed:true} };
-          try {
-            const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
-            const drawEvent = drawEvents(drawPayload).find(event =>
-              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
-            );
-            if (drawEvent) {
-              const drawSize = num(drawEvent.DrawSize) ?? 32;
-              const drawMatches = drawEventMatches(drawEvent);
-              const future = drawMatches
-                .filter(item => drawMatchContainsEala(item.match) && num(item.match.finished) !== 1 && text(item.match.mState).toUpperCase() !== "F")
-                .sort((a,b) => a.roundId - b.roundId)[0];
-              if (future) {
-                const roundName = roundNameFromDrawId(future.roundId) || "TBA";
-                const matchPlayers = drawMatchPlayers(future.match);
-                const opponentName = findDrawOpponent(drawEvent, future.match, future.roundId);
-                let timeStamp = text(future.match.MatchTimeStamp);
-                if(!timeStamp){
-                  try{
-                    const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
-                    const tournamentMatches=records(matchPayload,"matches");
-                    const ealaMatch=tournamentMatches.find(match=>{
-                      const p1=stringValue(match.PlayerIDA),p2=stringValue(match.PlayerIDB);
-                      const drawId=text(future.match.Id);
-                      return (drawId && drawId===text(match.MatchID)) ||
-                        (p1===String(EALA_ID)||p2===String(EALA_ID)) &&
-                        (!text(match.MatchState)||!["F","C"].includes(text(match.MatchState).toUpperCase()));
-                    });
-                    if(ealaMatch)timeStamp=text(ealaMatch.MatchTimeStamp);
-                  }catch(error){
-                    console.error("Upcoming tournament match-feed lookup failed:",error);
-                  }
-                }
-                const scheduledDate = timeStamp ? dateOnly(timeStamp) : "";
-                tournamentRecord = {
-                  tournament: text(drawEvent.TournamentTitle) || text(placeholder.title) || "Upcoming tournament",
-                  roundName,
-                  opponent: opponentName,
-                  matchStart: timeStamp && !Number.isNaN(Date.parse(timeStamp)) ? timeStamp : null,
-                  source: {
-                    source:"WTA tournament draw",
-                    draw_match_id:text(future.match.Id),
-                    draw_round_id:future.roundId,
-                    draw_size:drawSize,
-                    ...(scheduledDate ? {scheduled_date:scheduledDate} : {})
-                  }
-                };
-              }
-            }
-          } catch {}
-          if(tournamentRecord.source.source === "WTA tournament draw"){
-            await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[
-              EALA_ID,
-              tournamentRecord.tournament,
-              tournamentRecord.roundName,
-              tournamentRecord.opponent,
-              tournamentRecord.matchStart,
-              text(placeholder.surface) || "—",
-              "—",
-              text(placeholder.start) || null,
-              text(placeholder.end) || null,
-              null,
-              JSON.stringify(tournamentRecord.source)
-            ]);
-          }
-        }
-      } catch(error) {
-        console.error("Next-match fallback discovery failed:", error);
-      }
+    if(upcoming){
+      const m=upcoming.m;
+      const t=tournament(m);
+      const source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId);
+      candidates.push({
+        source:"wta:match",
+        tournament:tournamentName(m),
+        roundName:text(m.round_name)||"TBA",
+        opponent:opponent(m),
+        matchDate:upcoming.d||null,
+        matchStart:upcoming.start||null,
+        confidence:"match",
+        tournamentStart:text(t.startDate)||null,
+        tournamentEnd:text(t.endDate)||null,
+        surface:text(m.Surface)||text(m.surface)||null,
+        venue:text(m.city)||null,
+        sourceEventId:source,
+        rawJson:{...m,scheduled_date:upcoming.d||null}
+      });
     }
-    const found=Boolean(upcoming);
-    const placeholderExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
-    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,found||placeholderExists,runId]);
-    return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:found||placeholderExists};
+
+    const wtaTournamentCandidate=await discoverWtaTournamentCandidate();
+    if(wtaTournamentCandidate)candidates.push(wtaTournamentCandidate);
+
+    const asianGamesCandidate=await syncAsianGamesCandidate();
+    if(asianGamesCandidate)candidates.push(asianGamesCandidate);
+
+    const selectedNextMatch=selectNextMatchCandidate(candidates);
+
+    if(selectedNextMatch){
+      await q(
+        "insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_date=excluded.match_date,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",
+        [
+          EALA_ID,
+          selectedNextMatch.tournament,
+          selectedNextMatch.roundName,
+          selectedNextMatch.opponent,
+          selectedNextMatch.matchDate,
+          selectedNextMatch.matchStart,
+          selectedNextMatch.surface,
+          selectedNextMatch.venue,
+          selectedNextMatch.tournamentStart,
+          selectedNextMatch.tournamentEnd,
+          selectedNextMatch.sourceEventId,
+          JSON.stringify({...selectedNextMatch.rawJson,selected_source:selectedNextMatch.source})
+        ]
+      );
+    }
+
+    const nextMatchExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
+    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
+    return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:nextMatchExists};
   }catch(e){
     if(runId!==null)await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);
     throw e;
@@ -814,6 +821,155 @@ function findDrawOpponent(event: Row, current: Row, currentRoundId: number) {
 }
 
 
+async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>{
+      try {
+        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const tournamentPayload = await getJson(
+          WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to
+        );
+        const upcomingTournaments = records(tournamentPayload)
+          .map(item => {
+            const group = item.tournamentGroup && typeof item.tournamentGroup === "object" ? item.tournamentGroup as Row : {};
+            return {
+              groupId: num(group.id),
+              year: num(item.year),
+              start: text(item.startDate),
+              end: text(item.endDate),
+              title: text(item.title),
+              surface: text(item.surface)
+            };
+          })
+          .filter(item => {
+            const now = Date.now();
+            const starts = Date.parse(item.start);
+            const ends = Date.parse(item.end);
+            if (item.groupId === null || item.year === null || !Number.isFinite(starts) || !Number.isFinite(ends)) return false;
+            // Include tournaments that are already in progress as well as
+            // tournaments starting in the next 60 days. The previous 36-hour
+            // start-date window incorrectly skipped Singapore after it had
+            // been underway for more than 36 hours.
+            return ends >= now - 6 * 60 * 60 * 1000 && starts <= now + 60 * 24 * 60 * 60 * 1000;
+          })
+          .sort((a,b) => {
+            const now = Date.now();
+            const aActive = Date.parse(a.start) <= now && Date.parse(a.end) >= now;
+            const bActive = Date.parse(b.start) <= now && Date.parse(b.end) >= now;
+            if (aActive !== bActive) return aActive ? -1 : 1;
+            return Date.parse(a.start)-Date.parse(b.start);
+          });
+
+        let placeholder: Row | null = null;
+        let placeholderDrawPayload: unknown = null;
+        for (const t of upcomingTournaments.slice(0, 8)) {
+          if (t.groupId === null || t.year === null) continue;
+          try {
+            const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
+            const drawEvent = drawEvents(drawPayload).find(event =>
+              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
+            );
+            if (drawEvent) {
+              const lines = ((drawEvent.Draw as Row | undefined)?.DrawLine);
+              const hasEala = Array.isArray(lines) && lines.some(line =>
+                !!line && typeof line === "object" && playerIdsMatch((line as Row).Players)
+              );
+              if (hasEala) {
+                placeholder = t as Row;
+                placeholderDrawPayload = drawPayload;
+                break;
+              }
+            }
+          } catch {}
+          try {
+            const payload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
+            const players = records(payload,"players").length ? records(payload,"players") : records(payload);
+            if (players.some(playerIdsMatch)) {
+              placeholder = t as Row;
+              break;
+            }
+          } catch {}
+        }
+
+        if (placeholder) {
+          let tournamentRecord: { tournament:string; roundName:string; opponent:string; matchStart:string|null; source:Record<string,unknown> } = { tournament: text(placeholder.title) || "Upcoming tournament", roundName: "TBA", opponent: "TBA", matchStart: null, source: {source:"WTA tournament entry",entry_confirmed:true} };
+          try {
+            const drawPayload = placeholderDrawPayload ?? await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/draw");
+            const drawEvent = drawEvents(drawPayload).find(event =>
+              text(event.EventTypeCode) === "LS" || /Women's Singles/i.test(text(event.DrawTypeTitle))
+            );
+            if (drawEvent) {
+              const drawSize = num(drawEvent.DrawSize) ?? 32;
+              const drawMatches = drawEventMatches(drawEvent);
+              const future = drawMatches
+                .filter(item => drawMatchContainsEala(item.match) && num(item.match.finished) !== 1 && text(item.match.mState).toUpperCase() !== "F")
+                .sort((a,b) => a.roundId - b.roundId)[0];
+              if (future) {
+                const roundName = roundNameFromDrawId(future.roundId) || "TBA";
+                const matchPlayers = drawMatchPlayers(future.match);
+                const opponentName = findDrawOpponent(drawEvent, future.match, future.roundId);
+                let timeStamp = text(future.match.MatchTimeStamp);
+                if(!timeStamp){
+                  try{
+                    const matchPayload=await dbHttpGetJson(WTA+"/tournaments/"+placeholder.groupId+"/"+placeholder.year+"/matches");
+                    const tournamentMatches=records(matchPayload,"matches");
+                    const ealaMatch=tournamentMatches.find(match=>{
+                      const p1=stringValue(match.PlayerIDA),p2=stringValue(match.PlayerIDB);
+                      const drawId=text(future.match.Id);
+                      return (drawId && drawId===text(match.MatchID)) ||
+                        (p1===String(EALA_ID)||p2===String(EALA_ID)) &&
+                        (!text(match.MatchState)||!["F","C"].includes(text(match.MatchState).toUpperCase()));
+                    });
+                    if(ealaMatch)timeStamp=text(ealaMatch.MatchTimeStamp);
+                  }catch(error){
+                    console.error("Upcoming tournament match-feed lookup failed:",error);
+                  }
+                }
+                const scheduledDate = timeStamp ? dateOnly(timeStamp) : "";
+                tournamentRecord = {
+                  tournament: text(drawEvent.TournamentTitle) || text(placeholder.title) || "Upcoming tournament",
+                  roundName,
+                  opponent: opponentName,
+                  matchStart: timeStamp && !Number.isNaN(Date.parse(timeStamp)) ? timeStamp : null,
+                  source: {
+                    source:"WTA tournament draw",
+                    draw_match_id:text(future.match.Id),
+                    draw_round_id:future.roundId,
+                    draw_size:drawSize,
+                    ...(scheduledDate ? {scheduled_date:scheduledDate} : {})
+                  }
+                };
+              }
+            }
+          } catch {}
+          if(
+            tournamentRecord.source.source==="WTA tournament entry" &&
+            Number.isFinite(Date.parse(text(placeholder.start))) &&
+            Date.parse(text(placeholder.start))<=Date.now()
+          )return null;
+
+          return {
+            source:"wta:tournament",
+            tournament:tournamentRecord.tournament,
+            roundName:tournamentRecord.roundName,
+            opponent:tournamentRecord.opponent,
+            matchDate:tournamentRecord.source.scheduled_date ? text(tournamentRecord.source.scheduled_date) : null,
+            matchStart:tournamentRecord.matchStart,
+            confidence:"match",
+            tournamentStart:text(placeholder.start)||null,
+            tournamentEnd:text(placeholder.end)||null,
+            surface:text(placeholder.surface)||null,
+            venue:null,
+            sourceEventId:null,
+            rawJson:tournamentRecord.source
+          };
+        }
+      } catch(error) {
+        console.error("Next-match fallback discovery failed:", error);
+      }
+
+  return null;
+}
+
 async function getPlayerMatches(type:string){
   const matches:Row[]=[];
   const seen=new Set<string>();
@@ -871,6 +1027,7 @@ async function resolveExactMatchStarts(candidates:Row[]){
         for(const candidate of group.candidates){
           const candidateP1=stringValue(candidate.player_1),candidateP2=stringValue(candidate.player_2);
           const candidateOpponent=candidateOpponentName(candidate);
+          const candidateOpponentId=opponentId(candidate);
           const exact=matches
             .filter(m=>num(m.PlayerIDA)===EALA_ID||num(m.PlayerIDB)===EALA_ID)
             .map(m=>({

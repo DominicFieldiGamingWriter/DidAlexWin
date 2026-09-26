@@ -219,7 +219,7 @@ function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
 
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
   try {
-    const seasonYear=2026;
+    const seasonYear=new Date().getUTCFullYear();
     const [matches, statsRows, seasonRows, rankings, nextRows] = await Promise.all([
       fetchTable<SupabaseMatch>(
         `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,match_date,round_name,eala_won,raw_json&order=match_start.desc.nullslast,match_date.desc.nullslast&limit=500`
@@ -234,7 +234,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
         `eala_rankings?player_id=eq.${EALA_ID}&select=ranking_type,ranking&order=ranking_date.desc&limit=20`
       ),
       fetchTable<SupabaseNextMatch>(
-        `eala_next_match?player_id=eq.${EALA_ID}&select=tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,raw_json&limit=1`
+        `eala_next_match?player_id=eq.${EALA_ID}&select=tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,raw_json&limit=1`
       ),
     ]);
 
@@ -258,39 +258,18 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
             tournament: next.tournament,
             round: next.round_name ?? "TBA",
             opponent: next.opponent ?? "TBA",
-            date: next.raw_json?.scheduled_date
-              ? new Date(String(next.raw_json.scheduled_date)).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
+            date: next.match_date
+              ? new Date(next.match_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
               : next.match_start
-                ? new Date(next.match_start).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })
+                ? new Date(next.match_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
                 : next.tournament_start
                   ? (() => {
                       const start = new Date(next.tournament_start);
                       const end = next.tournament_end ? new Date(next.tournament_end) : null;
                       if (Number.isNaN(start.getTime())) return "TBA";
-                      const startText = start.toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                      });
-                      if (!end || Number.isNaN(end.getTime())) {
-                        return start.toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        });
-                      }
-                      const endText = end.toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      });
+                      const startText = start.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+                      if (!end || Number.isNaN(end.getTime())) return start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+                      const endText = end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
                       return startText + " – " + endText;
                     })()
                   : "TBA",
@@ -323,8 +302,8 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       },
       singlesTitles: season?.singles_titles ?? stats.singles_titles ?? 0,
       doublesTitles: season?.doubles_titles ?? stats.doubles_titles ?? 0,
-      highestSinglesRank: stats.highest_singles_ranking ?? 18,
-      highestDoublesRank: stats.highest_doubles_ranking ?? 88,
+      highestSinglesRank: stats.highest_singles_ranking ?? null,
+      highestDoublesRank: stats.highest_doubles_ranking ?? null,
       grandSlams: grandSlamYears(matches),
     };
   } catch (error) {

@@ -47,6 +47,15 @@ type OddsBookmaker = {
   markets: OddsMarket[];
 };
 
+type OddsSport = {
+  key: string;
+  group: string;
+  title: string;
+  description?: string;
+  active: boolean;
+  has_outrights: boolean;
+};
+
 type OddsResponse = {
   id?: string;
   commence_time?: string;
@@ -59,33 +68,6 @@ type OddsResponse = {
 const API_BASE = "https://api.the-odds-api.com/v4";
 const DEFAULT_REGIONS = "uk,eu,au";
 const CACHE_SECONDS = 2 * 60 * 60;
-
-const WTA_SPORT_KEYS: Record<string, string> = {
-  "SINGAPORE TENNIS OPEN": "tennis_wta_singapore_open",
-  "AUSTRALIAN OPEN": "tennis_wta_aus_open_singles",
-  "FRENCH OPEN": "tennis_wta_french_open",
-  "ROLAND GARROS": "tennis_wta_french_open",
-  "WIMBLEDON": "tennis_wta_wimbledon",
-  "US OPEN": "tennis_wta_us_open",
-  "MIAMI OPEN": "tennis_wta_miami_open",
-  "INDIAN WELLS": "tennis_wta_indian_wells",
-  "MADRID OPEN": "tennis_wta_madrid_open",
-  "ITALIAN OPEN": "tennis_wta_italian_open",
-  "CANADIAN OPEN": "tennis_wta_canadian_open",
-  "CINCINNATI OPEN": "tennis_wta_cincinnati_open",
-  "CHINA OPEN": "tennis_wta_china_open",
-  "GUADALAJARA OPEN": "tennis_wta_guadalajara_open",
-  "WASHINGTON OPEN": "tennis_wta_washington_open",
-  "QATAR OPEN": "tennis_wta_qatar_open",
-  "DUBAI CHAMPIONSHIPS": "tennis_wta_dubai",
-  "CHARLESTON OPEN": "tennis_wta_charleston_open",
-  "GERMAN OPEN": "tennis_wta_german_open",
-  "BAD HOMBURG OPEN": "tennis_wta_bad_homburg_open",
-  "MONTERREY OPEN": "tennis_wta_monterrey_open",
-  "WUHAN OPEN": "tennis_wta_wuhan_open",
-  "STUTTGART OPEN": "tennis_wta_stuttgart_open",
-  "QUEEN'S CLUB CHAMPIONSHIPS": "tennis_wta_queens_club_champ",
-};
 
 function normaliseName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -105,6 +87,25 @@ function matchesOpponent(value: string, opponent: string) {
   return Boolean(surname) && candidate.includes(normaliseName(surname));
 }
 
+async function resolveSportKey(tournament: string, apiKey: string): Promise<string | null> {
+  const sports = await getJson<OddsSport[]>(API_BASE + "/sports?apiKey=" + encodeURIComponent(apiKey));
+  if (!sports?.length) return null;
+  const tokens = tournament.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean)
+    .filter(token => !["open","championship","championships","presented","by","singles","women","womens"].includes(token));
+  const candidates=sports
+    .filter(s=>s.active&&s.group.toLowerCase()==="tennis")
+    .filter(s=>/wta|women/i.test(s.title+" "+(s.description??"")))
+    .map(s=>{
+      const combined=normaliseName(s.title+" "+(s.description??""));
+      const overlap=tokens.filter(t=>combined.includes(normaliseName(t))).length;
+      const titleNorm=normaliseName(s.title), targetNorm=normaliseName(tournament);
+      const exact=targetNorm&&(targetNorm.includes(titleNorm)||titleNorm.includes(targetNorm))?100:0;
+      return {sport:s,score:exact+overlap*10};
+    }).sort((a,b)=>b.score-a.score);
+  const best=candidates[0];
+  return best&&best.score>0?best.sport.key:null;
+}
+
 async function getJson<T>(url: string): Promise<T | null> {
   try {
     const response = await fetch(url, { next: { revalidate: CACHE_SECONDS } });
@@ -119,7 +120,7 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
   const apiKey = process.env.THE_ODDS_API_KEY;
   if (!apiKey || !nextMatch?.opponent || nextMatch.opponent === "TBA") return null;
 
-  const tournamentKey = WTA_SPORT_KEYS[nextMatch.tournament.trim().toUpperCase()];
+  const tournamentKey = await resolveSportKey(nextMatch.tournament, apiKey);
   if (!tournamentKey) return null;
 
   const params = new URLSearchParams({
