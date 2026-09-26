@@ -91,6 +91,195 @@ function nameMatches(candidate: string, feedLast: string) {
   if(!c||!f)return false;
   return c.split(" ").includes(f) || f.split(" ").includes(c);
 }
+
+const ASIAN_GAMES_START = Date.parse("2026-09-26T00:00:00+09:00");
+const ASIAN_GAMES_END = Date.parse("2026-10-04T23:59:59+09:00");
+const ASIAN_GAMES_BASE = "https://back.results.asiangames2026.org/s/AG2026/en/TEN";
+const ASIAN_GAMES_EVENT = "W.SINGLES-----------";
+const ASIAN_GAMES_EALA_REG = "9000172";
+
+async function getBornanJson(url:string) {
+  const r = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "DidAlexWin/1.0"
+    },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!r.ok) throw new Error("Bornan API returned " + r.status);
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  const direct = new TextDecoder().decode(bytes);
+  try {
+    return JSON.parse(direct);
+  } catch {}
+
+  for (const format of ["deflate", "gzip", "deflate-raw"] as const) {
+    try {
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
+      const decoded = await new Response(stream).text();
+      return JSON.parse(decoded);
+    } catch {}
+  }
+  throw new Error("Bornan response could not be decoded");
+}
+
+function asianContainsEala(value: unknown): boolean {
+  if (typeof value === "string") {
+    const v = value.toUpperCase();
+    return v === ASIAN_GAMES_EALA_REG || /\bEALA\b/.test(v);
+  }
+  if (typeof value === "number") return String(value) === ASIAN_GAMES_EALA_REG;
+  if (Array.isArray(value)) return value.some(asianContainsEala);
+  if (value && typeof value === "object") return Object.values(value as Row).some(asianContainsEala);
+  return false;
+}
+
+function asianText(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return "";
+}
+
+function asianSideName(side: unknown): string {
+  if (!side) return "";
+  if (typeof side === "string") return side.trim();
+  if (Array.isArray(side)) {
+    for (const item of side) {
+      const name = asianSideName(item);
+      if (name && !/\bEALA\b/i.test(name)) return name;
+    }
+    return "";
+  }
+  if (typeof side === "object") {
+    const o = side as Row;
+    for (const key of ["Name","PTDisplayLine","PlayerDisplayLine","fullName","name","Desc","DescA","DescS"]) {
+      const value = asianText(o[key]);
+      if (value && !/\bEALA\b/i.test(value)) return value;
+    }
+    const player = o.Player;
+    if (player && typeof player === "object") {
+      const p = player as Row;
+      const name = [asianText(p.FirstName), asianText(p.SurName)].filter(Boolean).join(" ");
+      if (name && !/\bEALA\b/i.test(name)) return name;
+    }
+    for (const value of Object.values(o)) {
+      const name = asianSideName(value);
+      if (name && !/\bEALA\b/i.test(name)) return name;
+    }
+  }
+  return "";
+}
+
+function asianMatchTimestamp(match: Row): string {
+  const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
+  for (const v of [
+    info.DateTimeRaw, info.MatchTimeStamp, match.DateTimeRaw, match.MatchTimeStamp,
+    info.StartTime, match.StartTime
+  ]) {
+    const s = asianText(v);
+    if (s && !Number.isNaN(Date.parse(s))) return s;
+  }
+  return "";
+}
+
+function asianMatchCompleted(match: Row): boolean {
+  const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
+  if (info.Last === true || match.Last === true) return true;
+  const status = (asianText(info.Status) || asianText(match.Status)).toUpperCase();
+  return status === "OFFICIAL" || status === "UNOFFICIAL" || status === "FINISHED";
+}
+
+function collectAsianBracketMatches(value: unknown, out: Row[] = []): Row[] {
+  if (Array.isArray(value)) {
+    for (const item of value) collectAsianBracketMatches(item, out);
+    return out;
+  }
+  if (!value || typeof value !== "object") return out;
+  const o = value as Row;
+  const looksLikeMatch = "Home" in o || "Away" in o;
+  if (looksLikeMatch && (asianContainsEala(o.Home) || asianContainsEala(o.Away) || asianContainsEala(o.Competitors))) {
+    out.push(o);
+  }
+  for (const item of Object.values(o)) collectAsianBracketMatches(item, out);
+  return out;
+}
+
+async function syncAsianGamesNextMatch(): Promise<boolean> {
+  const now = Date.now();
+  if (now < ASIAN_GAMES_START || now > ASIAN_GAMES_END) return false;
+
+  try {
+    const bracketPayload = await getBornanJson(
+      ASIAN_GAMES_BASE + "/brackets/" + ASIAN_GAMES_EVENT
+    );
+    const bracketMatches = collectAsianBracketMatches(bracketPayload)
+      .filter(match => !asianMatchCompleted(match))
+      .map(match => {
+        const info = match.Info && typeof match.Info === "object" ? match.Info as Row : {};
+        const ealaHome = asianContainsEala(match.Home);
+        const opponentSide = ealaHome ? match.Away : match.Home;
+        const opponentName = asianSideName(opponentSide);
+        return {
+          match,
+          opponent: opponentName || "TBA",
+          start: asianMatchTimestamp(match),
+          round: asianText(info.PhaseDescA) || asianText(info.PhaseDesc) || asianText(match.PhaseDescA) || asianText(match.PhaseDesc) || "TBA",
+          venue: asianText(info.VenueDesc) || asianText(match.VenueDesc) || "Nagoya City Higashiyama Park Tennis Center"
+        };
+      })
+      .filter(item => !item.start || Date.parse(item.start) >= now - 6 * 60 * 60 * 1000)
+      .sort((a,b) => {
+        const ad = a.start ? Date.parse(a.start) : Number.MAX_SAFE_INTEGER;
+        const bd = b.start ? Date.parse(b.start) : Number.MAX_SAFE_INTEGER;
+        return ad - bd;
+      });
+
+    if (bracketMatches.length) {
+      const next = bracketMatches[0];
+      const scheduledDate = next.start ? dateOnly(next.start) : "2026-09-28";
+      await q(
+        "insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",
+        [EALA_ID,"Asian Games 2026",next.round,next.opponent,next.start||null,null,next.venue,"2026-09-27","2026-10-03",null,JSON.stringify({source:"Bornan official Aichi-Nagoya 2026 bracket",event:ASIAN_GAMES_EVENT,scheduled_date:scheduledDate})]
+      );
+      return true;
+    }
+  } catch (error) {
+    console.error("Asian Games bracket lookup failed:", error);
+  }
+
+  try {
+    const entries = await getBornanJson(ASIAN_GAMES_BASE + "/entries/event/" + ASIAN_GAMES_EVENT);
+    const participants = Array.isArray(entries?.Partics) ? entries.Partics : [];
+    if (!participants.some((item: Row) => String(item.Reg) === ASIAN_GAMES_EALA_REG)) return false;
+
+    await q(
+      "insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",
+      [
+        EALA_ID,
+        "Asian Games 2026",
+        "Second Round",
+        "Winner of Patcharin Cheapchandej / Mahin Aftab Qureshi",
+        null,
+        null,
+        "Nagoya City Higashiyama Park Tennis Center",
+        "2026-09-27",
+        "2026-10-03",
+        null,
+        JSON.stringify({
+          source: "PHILTA draw reported September 25, 2026",
+          event: ASIAN_GAMES_EVENT,
+          first_round_bye: true,
+          opponent_path: ["Patcharin Cheapchandej", "Mahin Aftab Qureshi"],
+          scheduled_date: "2026-09-28"
+        })
+      ]
+    );
+    return true;
+  } catch (error) {
+    console.error("Asian Games fallback lookup failed:", error);
+    return false;
+  }
+}
+
 async function getJson(url:string){ const r=await fetch(url,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(15000)}); if(!r.ok)throw new Error("WTA API returned "+r.status); return r.json(); }
 async function getRanking(type:string,metric:string){
   for(let page=0;page<10;page++){
@@ -244,15 +433,17 @@ async function syncSchedule() {
     tournamentStart <= now &&
     tournamentEnd >= now - 6 * 60 * 60 * 1000;
 
+  const asianGamesActive = now >= ASIAN_GAMES_START && now <= ASIAN_GAMES_END;
+
   let interval = SYNC_INTERVAL_12_HOURS;
   let mode = "idle";
 
   if (imminentMatch || recentMatch) {
     interval = SYNC_INTERVAL_15_MINUTES;
     mode = "match_window";
-  } else if (tournamentActive) {
+  } else if (tournamentActive || asianGamesActive) {
     interval = SYNC_INTERVAL_1_HOUR;
-    mode = "tournament";
+    mode = asianGamesActive ? "asian_games" : "tournament";
   }
 
   const lastSync = last?.started_at ? Date.parse(String(last.started_at)) : NaN;
@@ -335,7 +526,8 @@ async function sync(){
     await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
     await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
     const upcoming=singles.filter(m=>!completed(m)&&text(m.player_2)!=="BYE").map(m=>({m,d:knownMatchDate(m),start:matchStart(m)})).filter(x=>x.d&&Date.parse(x.d+"T23:59:59Z")>=Date.now()-3600000).sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
-    if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify({...m,scheduled_date:upcoming.d||null})]);}
+    const asianGamesHandled=await syncAsianGamesNextMatch();
+    if(asianGamesHandled){}else if(upcoming){const m=upcoming.m,t=tournament(m),source=num(m.id)??num(m.eventId)??num(m.event_id)??num(m.matchId); await q("insert into public.eala_next_match(player_id,tournament,round_name,opponent,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now()) on conflict(player_id) do update set tournament=excluded.tournament,round_name=excluded.round_name,opponent=excluded.opponent,match_start=excluded.match_start,surface=excluded.surface,venue=excluded.venue,tournament_start=excluded.tournament_start,tournament_end=excluded.tournament_end,source_event_id=excluded.source_event_id,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,tournamentName(m),text(m.round_name)||"TBA",opponent(m),upcoming.start||null,text(m.Surface)||text(m.surface)||null,text(m.city)||null,text(t.startDate)||null,text(t.endDate)||null,source,JSON.stringify({...m,scheduled_date:upcoming.d||null})]);}
     else {
       try {
         const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
