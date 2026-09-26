@@ -66,6 +66,7 @@ type SupabaseNextMatch = {
   tournament: string;
   round_name: string | null;
   opponent: string | null;
+  match_date: string | null;
   match_start: string | null;
   surface: string | null;
   venue: string | null;
