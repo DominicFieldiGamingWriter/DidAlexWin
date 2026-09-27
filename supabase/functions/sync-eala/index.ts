@@ -219,6 +219,34 @@ function asianSideName(side:unknown):string {
   return "";
 }
 
+function asianRowKey(row:Row):string {
+  const info=row.Info&&typeof row.Info==="object"?row.Info as Row:{};
+  for(const v of [row.Key,info.Key,row.MatchKey,info.MatchKey]){
+    const key=asianText(v);
+    if(key)return key;
+  }
+  return "";
+}
+
+function asianRoundName(value:Row):string {
+  const info=value.Info&&typeof value.Info==="object"?value.Info as Row:{};
+  for(const v of [
+    info.Phase,
+    info.PhaseDesc,
+    value.Phase,
+    value.PhaseDesc,
+    value.Round,
+    value.RoundDesc
+  ]){
+    const raw=asianText(v);
+    if(!raw)continue;
+    const code=raw.toUpperCase().match(/\b(R128|R64|R32|R16|Q|S|F)\b/)?.[1];
+    if(code)return code;
+    return raw;
+  }
+  return "TBA";
+}
+
 function asianMatchTimestamp(match:Row):string {
   const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
   for(const v of [info.DateTimeRaw,info.MatchTimeStamp,match.DateTimeRaw,match.MatchTimeStamp,info.StartTime,match.StartTime]){
@@ -311,9 +339,10 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           const opponentName=asianSideName(ealaHome?match.Away:match.Home);
           const start=asianMatchTimestamp(match);
           return {
+            key:asianText(info.Key)||asianText(match.Key),
             opponent:opponentName||"TBA",
             start,
-            round:asianText(info.PhaseDescA)||asianText(info.PhaseDesc)||asianText(match.PhaseDescA)||asianText(match.PhaseDesc)||"TBA",
+            round:asianRoundName(match),
             venue:asianText(info.VenueDesc)||asianText(match.VenueDesc)||venue||null
           };
         })
@@ -322,20 +351,37 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
       if(bracketMatches.length){
         const next=bracketMatches[0];
+        const scheduledRow=next.key
+          ? scheduleRows.find(row=>asianRowKey(row)===next.key)||null
+          : null;
+        const exactStart=scheduledRow ? asianMatchTimestamp(scheduledRow) : next.start;
+        const exactRound=scheduledRow ? asianRoundName(scheduledRow) : next.round;
+        const exactVenue=scheduledRow
+          ? asianText(scheduledRow.VenueDesc)||
+            (scheduledRow.Venue&&typeof scheduledRow.Venue==="object"?asianText((scheduledRow.Venue as Row).Desc):"")||
+            next.venue||null
+          : next.venue;
         return {
           source:"bornan:asian-games",
           tournament:"Asian Games 2026",
-          roundName:next.round,
+          roundName:exactRound,
           opponent:next.opponent,
-          matchDate:next.start?dateOnly(next.start)||null:null,
-          matchStart:next.start||null,
+          matchDate:exactStart?dateOnly(exactStart)||null:null,
+          matchStart:exactStart||null,
           confidence:"match",
           tournamentStart:window.start,
           tournamentEnd:window.end,
           surface:null,
-          venue:next.venue,
+          venue:exactVenue,
           sourceEventId:null,
-          rawJson:{source:"Bornan official Aichi-Nagoya 2026 results",event:ASIAN_GAMES_EVENT,bracket_resolved:true,schedule_window:{start:window.start,end:window.end}}
+          rawJson:{
+            source:"Bornan official Aichi-Nagoya 2026 results",
+            event:ASIAN_GAMES_EVENT,
+            bracket_resolved:true,
+            schedule_joined:Boolean(scheduledRow),
+            match_key:next.key||null,
+            schedule_window:{start:window.start,end:window.end}
+          }
         };
       }
     }catch(error){
