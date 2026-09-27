@@ -309,6 +309,25 @@ function asianEventWindow(rows:Row[]){
   return {start,end,nextSlot,nextSlotAt:nextSlot?(asianText(nextSlot.DateTimeRaw)||asianText(nextSlot.MatchTimeStamp)):null};
 }
 
+function asianDateOffset(offset:number):string {
+  return new Date(Date.now()+offset*24*60*60*1000).toISOString().slice(0,10);
+}
+
+async function asianDailyScheduleRows():Promise<Row[]> {
+  const offsets=[0,1,2,3,4,5,6];
+  const payloads=await Promise.all(offsets.map(async offset=>{
+    try {
+      return await getBornanJson(ASIAN_GAMES_BASE+"/schedule/daily/"+asianDateOffset(offset));
+    } catch(error) {
+      console.error("Asian Games daily schedule lookup failed:",asianDateOffset(offset),error);
+      return null;
+    }
+  }));
+  const rows:Row[]=[];
+  for(const payload of payloads)rows.push(...asianScheduleRows(payload));
+  return rows;
+}
+
 function asianEntryIsEala(entry:Row):boolean {
   const name=asianText(entry.Name);
   const first=asianText(entry.FirstName);
@@ -323,7 +342,9 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
     const schedulePayload=await getBornanJson(ASIAN_GAMES_BASE+"/schedule/event/"+ASIAN_GAMES_EVENT);
     const scheduleRows=asianScheduleRows(schedulePayload);
-    const window=asianEventWindow(scheduleRows);
+    const dailyRows=await asianDailyScheduleRows();
+    const allScheduleRows=[...scheduleRows,...dailyRows];
+    const window=asianEventWindow(allScheduleRows);
     const venue=window.nextSlot
       ? asianText(window.nextSlot.VenueDesc)||
         (window.nextSlot.Venue&&typeof window.nextSlot.Venue==="object"?asianText((window.nextSlot.Venue as Row).Desc):"")
@@ -352,7 +373,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
       if(bracketMatches.length){
         const next=bracketMatches[0];
         const scheduledRow=next.key
-          ? scheduleRows.find(row=>asianRowKey(row)===next.key)||null
+          ? allScheduleRows.find(row=>asianRowKey(row)===next.key)||null
           : null;
         const exactStart=scheduledRow ? asianMatchTimestamp(scheduledRow) : next.start;
         const exactRound=scheduledRow ? asianRoundName(scheduledRow) : next.round;
