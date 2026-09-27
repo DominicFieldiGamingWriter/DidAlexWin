@@ -314,7 +314,7 @@ function asianDateOffset(offset:number):string {
 }
 
 async function asianDailyScheduleRows():Promise<Row[]> {
-  const offsets=[0,1,2,3,4,5,6];
+  const offsets=[0,1,2];
   const payloads=await Promise.all(offsets.map(async offset=>{
     try {
       return await getBornanJson(ASIAN_GAMES_BASE+"/schedule/daily/"+asianDateOffset(offset));
@@ -342,9 +342,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
     const schedulePayload=await getBornanJson(ASIAN_GAMES_BASE+"/schedule/event/"+ASIAN_GAMES_EVENT);
     const scheduleRows=asianScheduleRows(schedulePayload);
-    const dailyRows=await asianDailyScheduleRows();
-    const allScheduleRows=[...scheduleRows,...dailyRows];
-    const window=asianEventWindow(allScheduleRows);
+    const window=asianEventWindow(scheduleRows);
     const venue=window.nextSlot
       ? asianText(window.nextSlot.VenueDesc)||
         (window.nextSlot.Venue&&typeof window.nextSlot.Venue==="object"?asianText((window.nextSlot.Venue as Row).Desc):"")
@@ -372,6 +370,9 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
       if(bracketMatches.length){
         const next=bracketMatches[0];
+        const dailyRows=await asianDailyScheduleRows();
+        const allScheduleRows=[...scheduleRows,...dailyRows];
+        const fullWindow=asianEventWindow(allScheduleRows);
         const scheduledRow=next.key
           ? allScheduleRows.find(row=>asianRowKey(row)===next.key)||null
           : null;
@@ -390,8 +391,8 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           matchDate:exactStart?dateOnly(exactStart)||null:null,
           matchStart:exactStart||null,
           confidence:"match",
-          tournamentStart:window.start,
-          tournamentEnd:window.end,
+          tournamentStart:fullWindow.start||window.start,
+          tournamentEnd:fullWindow.end||window.end,
           surface:null,
           venue:exactVenue,
           sourceEventId:null,
