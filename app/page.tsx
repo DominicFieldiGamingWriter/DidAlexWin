@@ -130,6 +130,23 @@ function nameLines(value: unknown) {
   };
 }
 
+function displayPersonName(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "Opponent";
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((part) => {
+      const hasLetters = /[A-Za-z]/.test(part);
+      if (!hasLetters || part !== part.toUpperCase()) return part;
+      return part
+        .toLowerCase()
+        .replace(/(^|[-'’])([a-z])/g, (_match, prefix, letter) => prefix + letter.toUpperCase());
+    })
+    .join(" ");
+}
+
+
 function latestOpponent(match: Record<string, unknown> | null) {
   if (!match) return "Opponent";
   const opponent = match.opponent;
@@ -315,7 +332,7 @@ export default async function Home() {
         <div className="upcoming-card">
           <div className="upcoming-main">
             <div className="upcoming-title">
-              {data.nextMatch ? data.nextMatch.opponent : "Waiting for scheduled fixture"}
+              {data.nextMatch ? displayPersonName(data.nextMatch.opponent) : "Waiting for scheduled fixture"}
             </div>
             <div className="upcoming-event">
               {data.nextMatch ? formatTournament(data.nextMatch.tournament) : "Next tournament information unavailable"}
@@ -351,7 +368,7 @@ export default async function Home() {
                     <strong className="odds-price">{odds.matchWinner.eala}</strong>
                   </a>
                   <a className="odds-row" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">
-                    <span className="odds-player">{odds.matchWinner.opponentName}</span>
+                    <span className="odds-player">{displayPersonName(odds.matchWinner.opponentName)}</span>
                     <strong className="odds-price">{odds.matchWinner.opponent}</strong>
                   </a>
                 </div>
