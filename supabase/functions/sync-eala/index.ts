@@ -230,6 +230,15 @@ function asianRowKey(row:Row):string {
 
 function asianRoundName(value:Row):string {
   const info=value.Info&&typeof value.Info==="object"?value.Info as Row:{};
+  const bornanRounds:Record<string,string>={
+    "64FNL":"R128",
+    "32FNL":"R64",
+    "16FNL":"R32",
+    "8FNL":"R16",
+    "4FNL":"Q",
+    "2FNL":"S",
+    "FNL":"F"
+  };
   for(const v of [
     info.Phase,
     info.PhaseDesc,
@@ -240,8 +249,11 @@ function asianRoundName(value:Row):string {
   ]){
     const raw=asianText(v);
     if(!raw)continue;
-    const code=raw.toUpperCase().match(/\b(R128|R64|R32|R16|Q|S|F)\b/)?.[1];
-    if(code)return code;
+    const normalized=raw.toUpperCase();
+    const standard=normalized.match(/\b(R128|R64|R32|R16|Q|S|F)\b/)?.[1];
+    if(standard)return standard;
+    const bornan=normalized.match(/\b(64FNL|32FNL|16FNL|8FNL|4FNL|2FNL|FNL)\b/)?.[1];
+    if(bornan)return bornanRounds[bornan];
     return raw;
   }
   return "TBA";
