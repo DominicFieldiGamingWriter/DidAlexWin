@@ -254,7 +254,7 @@ function asianRoundName(value:Row):string {
     const normalized=raw.toUpperCase();
     const standard=normalized.match(/\b(R128|R64|R32|R16|Q|S|F)\b/)?.[1];
     if(standard)return standard;
-    const bornan=normalized.match(/\b(64FNL|32FNL|16FNL|8FNL|4FNL|2FNL|FNL)\b/)?.[1];
+    const bornan=normalized.match(/\b(64FNL|32FNL|16FNL|8FNL|QFNL|4FNL|SFNL|2FNL|FNL)\b/)?.[1];
     if(bornan)return bornanRounds[bornan];
     return raw;
   }
@@ -485,13 +485,19 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
       const completedEalaMatches=allEalaBracketMatches
         .filter(match=>asianMatchCompleted(match))
         .sort((a,b)=>asianMatchTimestamp(b)?Date.parse(asianMatchTimestamp(b))-Date.parse(asianMatchTimestamp(a)):0);
-      if(completedEalaMatches.length){
-        const latestCompleted=completedEalaMatches[0];
+      const completedScheduleMatches=allScheduleRows
+        .filter(row=>asianContainsEala(row)&&asianMatchCompleted(row))
+        .sort((a,b)=>{
+          const at=asianMatchTimestamp(a),bt=asianMatchTimestamp(b);
+          return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
+        });
+      const latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
+      if(latestCompleted){
         const latestKey=asianRowKey(latestCompleted);
         if(latestKey){
           try{
             const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+latestKey);
-            await upsertAsianCompletedResult(latestCompleted, scheduleRows, resultPayload);
+            await upsertAsianCompletedResult(latestCompleted, allScheduleRows, resultPayload);
           }catch(error){
             console.error("Asian Games completed-result lookup failed:",error);
           }
