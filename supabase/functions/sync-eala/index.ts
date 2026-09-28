@@ -228,6 +228,48 @@ function asianRowKey(row:Row):string {
   return "";
 }
 
+function asianPreviousMatchKey(key:string):string {
+  const parts=key.split(".");
+  if(parts.length<3)return "";
+  const previous:Record<string,string>={
+    "8FNL":"16FNL",
+    "QFNL":"8FNL",
+    "SFNL":"QFNL",
+    "FNL":"SFNL"
+  };
+  const round=parts[parts.length-2]||"";
+  const previousRound=previous[round];
+  if(!previousRound)return "";
+  parts[parts.length-2]=previousRound;
+  return parts.join(".");
+}
+
+function asianResultMatch(value:unknown):Row|null {
+  if(Array.isArray(value)){
+    for(const item of value){
+      const found=asianResultMatch(item);
+      if(found)return found;
+    }
+    return null;
+  }
+  if(!value||typeof value!=="object")return null;
+  const o=value as Row;
+  if(("Home" in o||"Away" in o) && (asianContainsEala(o.Home)||asianContainsEala(o.Away)))return o;
+  const competitors=o.Competitors;
+  if(Array.isArray(competitors)&&competitors.some(asianContainsEala)){
+    return {
+      ...o,
+      Home:competitors[0],
+      Away:competitors[1]
+    };
+  }
+  for(const item of Object.values(o)){
+    const found=asianResultMatch(item);
+    if(found)return found;
+  }
+  return null;
+}
+
 function asianRoundName(value:Row):string {
   const info=value.Info&&typeof value.Info==="object"?value.Info as Row:{};
   const bornanRounds:Record<string,string>={
@@ -491,7 +533,22 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           const at=asianMatchTimestamp(a),bt=asianMatchTimestamp(b);
           return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
         });
-      const latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
+      let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
+      if(!latestCompleted && bracketMatches.length){
+        const previousKey=asianPreviousMatchKey(bracketMatches[0].key);
+        if(previousKey){
+          try{
+            const previousPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+previousKey);
+            const previousMatch=asianResultMatch(previousPayload);
+            if(previousMatch){
+              latestCompleted=previousMatch;
+              await upsertAsianCompletedResult(previousMatch, allScheduleRows, previousPayload);
+            }
+          }catch(error){
+            console.error("Asian Games previous-match result lookup failed:",error);
+          }
+        }
+      }
       if(latestCompleted){
         const latestKey=asianRowKey(latestCompleted);
         if(latestKey){
