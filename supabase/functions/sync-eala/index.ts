@@ -748,9 +748,10 @@ async function syncSchedule() {
   let interval = SYNC_INTERVAL_12_HOURS;
   let mode = "idle";
 
-  if(imminentMatch||recentMatch){
+  const asianGamesActive = tournamentActive && String(next?.tournament ?? "").toLowerCase().includes("asian games");
+  if(imminentMatch||recentMatch||asianGamesActive){
     interval=SYNC_INTERVAL_15_MINUTES;
-    mode="match_window";
+    mode=asianGamesActive ? "asian_games_match_window" : "match_window";
   }else if(tournamentActive||tournamentImminent||tournamentRecentlyEnded){
     interval=SYNC_INTERVAL_1_HOUR;
     mode=tournamentActive?"tournament":tournamentImminent?"upcoming_event":"recent_event";
