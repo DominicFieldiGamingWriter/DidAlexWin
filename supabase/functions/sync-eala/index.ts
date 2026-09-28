@@ -236,7 +236,9 @@ function asianRoundName(value:Row):string {
     "16FNL":"R32",
     "8FNL":"R16",
     "4FNL":"Q",
+    "QFNL":"Q",
     "2FNL":"S",
+    "SFNL":"S",
     "FNL":"F"
   };
   for(const v of [
@@ -273,6 +275,123 @@ function asianMatchCompleted(match:Row):boolean {
   if(info.Last===true||match.Last===true)return true;
   const status=(asianText(info.Status)||asianText(match.Status)).toUpperCase();
   return status==="OFFICIAL"||status==="UNOFFICIAL"||status==="FINISHED";
+}
+
+function asianScoreText(value:unknown):string {
+  if(typeof value==="string"){
+    const normalized=value.replace(/[–—]/g,"-").replace(/\\s+/g," ").trim();
+    const pairs=normalized.match(/\\d+\\s*-\\s*\\d+/g);
+    if(pairs&&pairs.length>=2)return pairs.join(" ");
+    return "";
+  }
+  if(Array.isArray(value)){
+    const pairs=value.map(item=>{
+      if(Array.isArray(item)&&item.length>=2&&item.every(v=>Number.isFinite(Number(v))))return Number(item[0])+"-"+Number(item[1]);
+      if(item&&typeof item==="object"){
+        const o=item as Row;
+        const a=o.Home??o.home??o.A??o.a??o.ScoreA??o.scoreA;
+        const b=o.Away??o.away??o.B??o.b??o.ScoreB??o.scoreB;
+        if(a!==undefined&&b!==undefined&&Number.isFinite(Number(a))&&Number.isFinite(Number(b)))return Number(a)+"-"+Number(b);
+      }
+      return "";
+    }).filter(Boolean);
+    if(pairs.length>=2)return pairs.join(" ");
+  }
+  if(value&&typeof value==="object"){
+    const o=value as Row;
+    for(const key of ["Score","Scores","SetScores","score","scores","ResultText","ScoreText","result"]){
+      const parsed=asianScoreText(o[key]);
+      if(parsed)return parsed;
+    }
+  }
+  return "";
+}
+
+function asianFindScore(value:unknown):string {
+  const direct=asianScoreText(value);
+  if(direct)return direct;
+  if(Array.isArray(value)){
+    for(const item of value){
+      const found=asianFindScore(item);
+      if(found)return found;
+    }
+    return "";
+  }
+  if(value&&typeof value==="object"){
+    const o=value as Row;
+    for(const key of ["ResDetail","Result","Results","Competitors","Score","Scores","SetScores","score","scores"]){
+      const found=asianFindScore(o[key]);
+      if(found)return found;
+    }
+    for(const item of Object.values(o)){
+      const found=asianFindScore(item);
+      if(found)return found;
+    }
+  }
+  return "";
+}
+
+function asianScoreWinner(score:string,ealaIsHome:boolean):boolean|null {
+  const sets=score.match(/\\d+\\s*-\\s*\\d+/g)?.map(pair=>pair.split("-").map(v=>Number(v)))??[];
+  if(sets.length<2)return null;
+  const homeSets=sets.filter(([a,b])=>a>b).length;
+  const awaySets=sets.filter(([a,b])=>b>a).length;
+  if(homeSets===awaySets)return null;
+  const homeWon=homeSets>awaySets;
+  return ealaIsHome?homeWon:!homeWon;
+}
+
+async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultPayload:unknown) {
+  const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
+  const key=asianRowKey(match);
+  if(!key)return false;
+  const ealaIsHome=asianContainsEala(match.Home);
+  const opponent=asianSideName(ealaIsHome?match.Away:match.Home)||"Opponent";
+  const scheduledRow=scheduleRows.find(row=>asianRowKey(row)===key)||null;
+  const matchStart=scheduledRow?asianMatchTimestamp(scheduledRow):asianMatchTimestamp(match);
+  const score=asianFindScore(resultPayload)||asianFindScore(match);
+  const ealaWon=asianScoreWinner(score,ealaIsHome);
+  if(ealaWon===null)return false;
+
+  const eventId=stableEventId({match_key:key}, "asian-singles");
+  const round=asianRoundName(match);
+  const winner=ealaWon?(ealaIsHome?1:2):(ealaIsHome?2:1);
+  const rawJson={
+    source:"Bornan official Aichi-Nagoya 2026 results",
+    source_match_key:key,
+    TournamentName:"Asian Games 2026",
+    MatchTimeStamp:matchStart||null,
+    matchDate:matchStart?dateOnly(matchStart):null,
+    round_name:round,
+    player_1:ealaIsHome?String(EALA_ID):opponent,
+    player_2:ealaIsHome?opponent:String(EALA_ID),
+    winner,
+    scores:score,
+    status:"completed",
+    home_players:ealaIsHome?String(EALA_ID):opponent,
+    away_players:ealaIsHome?opponent:String(EALA_ID),
+    asian_result_payload:resultPayload
+  };
+
+  await q(
+    "insert into public.eala_matches(event_id,player_id,match_date,match_start,status,category,tournament_name,round_name,winner_side,eala_side,eala_won,home_players,away_players,set_scores,custom_id,raw_json,updated_at) values($1,$2,$3,$4,'completed','singles','Asian Games 2026',$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13::jsonb,now()) on conflict(event_id) do update set match_date=excluded.match_date,match_start=excluded.match_start,status=excluded.status,tournament_name=excluded.tournament_name,round_name=excluded.round_name,winner_side=excluded.winner_side,eala_side=excluded.eala_side,eala_won=excluded.eala_won,home_players=excluded.home_players,away_players=excluded.away_players,set_scores=excluded.set_scores,custom_id=excluded.custom_id,raw_json=excluded.raw_json,updated_at=now()",
+    [
+      eventId,
+      EALA_ID,
+      matchStart?dateOnly(matchStart):null,
+      matchStart||null,
+      round,
+      winner===1?"home":"away",
+      ealaIsHome?"home":"away",
+      ealaWon,
+      JSON.stringify(ealaIsHome?String(EALA_ID):opponent),
+      JSON.stringify(ealaIsHome?opponent:String(EALA_ID)),
+      JSON.stringify(score.split(" ").filter(Boolean)),
+      key,
+      JSON.stringify(rawJson)
+    ]
+  );
+  return true;
 }
 
 function collectAsianBracketMatches(value:unknown,out:Row[]=[],seen=new Set<string>()):Row[]{
@@ -362,7 +481,24 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
     try{
       const bracketPayload=await getBornanJson(ASIAN_GAMES_BASE+"/brackets/"+ASIAN_GAMES_EVENT);
-      const bracketMatches=collectAsianBracketMatches(bracketPayload)
+      const allEalaBracketMatches=collectAsianBracketMatches(bracketPayload);
+      const completedEalaMatches=allEalaBracketMatches
+        .filter(match=>asianMatchCompleted(match))
+        .sort((a,b)=>asianMatchTimestamp(b)?Date.parse(asianMatchTimestamp(b))-Date.parse(asianMatchTimestamp(a)):0);
+      if(completedEalaMatches.length){
+        const latestCompleted=completedEalaMatches[0];
+        const latestKey=asianRowKey(latestCompleted);
+        if(latestKey){
+          try{
+            const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+latestKey);
+            await upsertAsianCompletedResult(latestCompleted, scheduleRows, resultPayload);
+          }catch(error){
+            console.error("Asian Games completed-result lookup failed:",error);
+          }
+        }
+      }
+
+      const bracketMatches=allEalaBracketMatches
         .filter(match=>!asianMatchCompleted(match))
         .map(match=>{
           const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
