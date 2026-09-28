@@ -383,6 +383,26 @@ function asianScoreWinner(score:string,ealaIsHome:boolean):boolean|null {
   return ealaIsHome?homeWon:!homeWon;
 }
 
+function asianExplicitWinner(value:unknown,ealaIsHome:boolean):boolean|null {
+  if(!value||typeof value!=="object")return null;
+  const o=value as Row;
+  for(const key of ["Winner","winner","WinnerSide","winnerSide","WinnerCompetitor","winnerCompetitor"]){
+    const v=o[key];
+    if(typeof v==="number" && (v===1||v===2))return ealaIsHome?v===1:v===2;
+    if(typeof v==="string"){
+      const s=v.trim().toUpperCase();
+      if(s==="HOME"||s==="1")return ealaIsHome;
+      if(s==="AWAY"||s==="2")return !ealaIsHome;
+      if(/\bEALA\b/i.test(v))return true;
+    }
+  }
+  for(const key of ["ResDetail","Result","Results","MatchResult","ResultDetail"]){
+    const found=asianExplicitWinner(o[key],ealaIsHome);
+    if(found!==null)return found;
+  }
+  return null;
+}
+
 async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultPayload:unknown) {
   const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
   const key=asianRowKey(match);
@@ -392,7 +412,7 @@ async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultP
   const scheduledRow=scheduleRows.find(row=>asianRowKey(row)===key)||null;
   const matchStart=scheduledRow?asianMatchTimestamp(scheduledRow):asianMatchTimestamp(match);
   const score=asianFindScore(resultPayload)||asianFindScore(match);
-  const ealaWon=asianScoreWinner(score,ealaIsHome);
+  const ealaWon=asianScoreWinner(score,ealaIsHome)??asianExplicitWinner(resultPayload,ealaIsHome)??asianExplicitWinner(match,ealaIsHome);
   if(ealaWon===null)return false;
 
   const eventId=stableEventId({match_key:key}, "asian-singles");
@@ -574,31 +594,31 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
         });
       let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
-      if(!latestCompleted){
-        const seedKey=resolvedBracketMatches[0]?.key||existingSourceKey;
-        const previousKey=asianPreviousMatchKey(seedKey);
-        if(previousKey){
-          try{
-            const previousPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+previousKey);
-            const previousMatch=asianResultMatch(previousPayload);
-            if(previousMatch){
-              latestCompleted=previousMatch;
-              await upsertAsianCompletedResult(previousMatch, allScheduleRows, previousPayload);
-            }
-          }catch(error){
-            console.error("Asian Games previous-match result lookup failed:",error);
-          }
+
+      // Query Bornan's result endpoint for the previous match immediately.
+      // Do not depend on the bracket status changing to "completed".
+      const resultKeys=new Set<string>();
+      for(const seed of [resolvedBracketMatches[0]?.key,existingSourceKey]){
+        if(seed){
+          const previousKey=asianPreviousMatchKey(seed);
+          if(previousKey)resultKeys.add(previousKey);
         }
       }
       if(latestCompleted){
-        const latestKey=asianRowKey(latestCompleted);
-        if(latestKey){
-          try{
-            const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+latestKey);
-            await upsertAsianCompletedResult(latestCompleted, allScheduleRows, resultPayload);
-          }catch(error){
-            console.error("Asian Games completed-result lookup failed:",error);
+        const completedKey=asianRowKey(latestCompleted);
+        if(completedKey)resultKeys.add(completedKey);
+      }
+
+      for(const resultKey of resultKeys){
+        try{
+          const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+resultKey);
+          const resultMatch=asianResultMatch(resultPayload);
+          if(resultMatch){
+            const saved=await upsertAsianCompletedResult(resultMatch, allScheduleRows, resultPayload);
+            if(saved)latestCompleted=resultMatch;
           }
+        }catch(error){
+          console.error("Asian Games completed-result lookup failed:",resultKey,error);
         }
       }
 
