@@ -510,6 +510,9 @@ function asianEntryIsEala(entry:Row):boolean {
 
 async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
   try{
+    const existingRows=await q("select raw_json from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]);
+    const existingRaw=existingRows[0]?.raw_json&&typeof existingRows[0].raw_json==="object"?existingRows[0].raw_json as Row:{};
+    const existingSourceKey=asianText(existingRaw.match_key);
     const entries=await getBornanJson(ASIAN_GAMES_BASE+"/entries/event/"+ASIAN_GAMES_EVENT);
     if(!asianContainsEala(entries))return null;
 
@@ -524,43 +527,6 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
     try{
       const bracketPayload=await getBornanJson(ASIAN_GAMES_BASE+"/brackets/"+ASIAN_GAMES_EVENT);
       const allEalaBracketMatches=collectAsianBracketMatches(bracketPayload);
-      const completedEalaMatches=allEalaBracketMatches
-        .filter(match=>asianMatchCompleted(match))
-        .sort((a,b)=>asianMatchTimestamp(b)?Date.parse(asianMatchTimestamp(b))-Date.parse(asianMatchTimestamp(a)):0);
-      const completedScheduleMatches=allScheduleRows
-        .filter(row=>asianContainsEala(row)&&asianMatchCompleted(row))
-        .sort((a,b)=>{
-          const at=asianMatchTimestamp(a),bt=asianMatchTimestamp(b);
-          return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
-        });
-      let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
-      if(!latestCompleted && resolvedBracketMatches.length){
-        const previousKey=asianPreviousMatchKey(bracketMatches[0].key);
-        if(previousKey){
-          try{
-            const previousPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+previousKey);
-            const previousMatch=asianResultMatch(previousPayload);
-            if(previousMatch){
-              latestCompleted=previousMatch;
-              await upsertAsianCompletedResult(previousMatch, allScheduleRows, previousPayload);
-            }
-          }catch(error){
-            console.error("Asian Games previous-match result lookup failed:",error);
-          }
-        }
-      }
-      if(latestCompleted){
-        const latestKey=asianRowKey(latestCompleted);
-        if(latestKey){
-          try{
-            const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+latestKey);
-            await upsertAsianCompletedResult(latestCompleted, allScheduleRows, resultPayload);
-          }catch(error){
-            console.error("Asian Games completed-result lookup failed:",error);
-          }
-        }
-      }
-
       const bracketMatches=allEalaBracketMatches
         .filter(match=>!asianMatchCompleted(match))
         .map(match=>{
@@ -597,6 +563,44 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
         .sort((a,b)=>(a.start?Date.parse(a.start):Number.MAX_SAFE_INTEGER)-(b.start?Date.parse(b.start):Number.MAX_SAFE_INTEGER));
 
       const resolvedBracketMatches=bracketMatches.length?bracketMatches:scheduledEalaMatches;
+
+      const completedEalaMatches=allEalaBracketMatches
+        .filter(match=>asianMatchCompleted(match))
+        .sort((a,b)=>asianMatchTimestamp(b)?Date.parse(asianMatchTimestamp(b))-Date.parse(asianMatchTimestamp(a)):0);
+      const completedScheduleMatches=allScheduleRows
+        .filter(row=>asianContainsEala(row)&&asianMatchCompleted(row))
+        .sort((a,b)=>{
+          const at=asianMatchTimestamp(a),bt=asianMatchTimestamp(b);
+          return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
+        });
+      let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
+      if(!latestCompleted){
+        const seedKey=resolvedBracketMatches[0]?.key||existingSourceKey;
+        const previousKey=asianPreviousMatchKey(seedKey);
+        if(previousKey){
+          try{
+            const previousPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+previousKey);
+            const previousMatch=asianResultMatch(previousPayload);
+            if(previousMatch){
+              latestCompleted=previousMatch;
+              await upsertAsianCompletedResult(previousMatch, allScheduleRows, previousPayload);
+            }
+          }catch(error){
+            console.error("Asian Games previous-match result lookup failed:",error);
+          }
+        }
+      }
+      if(latestCompleted){
+        const latestKey=asianRowKey(latestCompleted);
+        if(latestKey){
+          try{
+            const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+latestKey);
+            await upsertAsianCompletedResult(latestCompleted, allScheduleRows, resultPayload);
+          }catch(error){
+            console.error("Asian Games completed-result lookup failed:",error);
+          }
+        }
+      }
 
       if(resolvedBracketMatches.length){
         const next=resolvedBracketMatches[0];
@@ -954,7 +958,44 @@ async function sync(force=false){
     const asianGamesCandidate=await syncAsianGamesCandidate();
     if(asianGamesCandidate)candidates.push(asianGamesCandidate);
 
-    const selectedNextMatch=selectNextMatchCandidate(candidates);
+    let selectedNextMatch=selectNextMatchCandidate(candidates);
+
+    if(
+      selectedNextMatch?.source==="bornan:asian-games" &&
+      selectedNextMatch.confidence==="event" &&
+      selectedNextMatch.opponent==="TBA"
+    ){
+      const existingRows=await q(
+        "select tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end,source_event_id,raw_json from public.eala_next_match where player_id=$1 limit 1",
+        [EALA_ID]
+      );
+      const existing=existingRows[0] as Row|undefined;
+      const raw=existing?.raw_json&&typeof existing.raw_json==="object"?existing.raw_json as Row:{};
+      if(
+        existing &&
+        String(existing.tournament??"").toLowerCase().includes("asian games") &&
+        String(raw.selected_source??"").toLowerCase().includes("bornan:asian-games") &&
+        raw.bracket_resolved===true &&
+        String(existing.opponent??"").trim() &&
+        String(existing.opponent??"").toUpperCase()!=="TBA"
+      ){
+        selectedNextMatch={
+          source:"bornan:asian-games",
+          tournament:String(existing.tournament),
+          roundName:String(existing.round_name??"TBA"),
+          opponent:String(existing.opponent),
+          matchDate:existing.match_date?String(existing.match_date):null,
+          matchStart:existing.match_start?String(existing.match_start):null,
+          confidence:"match",
+          tournamentStart:existing.tournament_start?String(existing.tournament_start):null,
+          tournamentEnd:existing.tournament_end?String(existing.tournament_end):null,
+          surface:existing.surface?String(existing.surface):null,
+          venue:existing.venue?String(existing.venue):null,
+          sourceEventId:existing.source_event_id?Number(existing.source_event_id):null,
+          rawJson:raw
+        };
+      }
+    }
 
     if(selectedNextMatch){
       await q(
