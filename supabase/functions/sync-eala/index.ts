@@ -777,8 +777,9 @@ async function syncSchedule() {
   };
 }
 
-async function sync(){
+async function sync(force=false){
   const schedule = await syncSchedule();
+  if(force) schedule.due=true;
   if (!schedule.due) {
     return {
       ok: true,
@@ -1277,7 +1278,8 @@ Deno.serve(async(req)=>{
   if(req.method!=="GET"&&req.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
   try{
     if(!(await authorized(req))) return Response.json({ok:false,error:"Unauthorized"},{status:401});
-    return Response.json(await sync());
+    const force=new URL(req.url).searchParams.get("force")==="1";
+    return Response.json(await sync(force));
   }catch(e){
     console.error(e);
     return Response.json({ok:false,error:e instanceof Error?e.message:"Sync failed"},{status:500});
