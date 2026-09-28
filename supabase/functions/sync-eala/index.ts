@@ -698,7 +698,7 @@ async function syncSchedule() {
   const now = Date.now();
   const [nextRows, latestRows, lastRows] = await Promise.all([
     q(
-      "select match_start, tournament_start, tournament_end from public.eala_next_match where player_id=$1 limit 1",
+      "select tournament, match_start, tournament_start, tournament_end from public.eala_next_match where player_id=$1 limit 1",
       [EALA_ID]
     ),
     q(
