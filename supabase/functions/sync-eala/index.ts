@@ -315,8 +315,8 @@ function asianMatchTimestamp(match:Row):string {
 function asianMatchCompleted(match:Row):boolean {
   const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
   if(info.Last===true||match.Last===true)return true;
-  const status=(asianText(info.Status)||asianText(match.Status)).toUpperCase();
-  return status==="OFFICIAL"||status==="UNOFFICIAL"||status==="FINISHED";
+  const status=(asianText(info.Status)||asianText(info.StatusDesc)||asianText(match.Status)||asianText(match.StatusDesc)).toUpperCase();
+  return status==="OFFICIAL"||status==="UNOFFICIAL"||status==="FINISHED"||status.includes("FINISH")||status.includes("COMPLETED");
 }
 
 function asianScoreText(value:unknown):string {
@@ -534,7 +534,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
         });
       let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
-      if(!latestCompleted && bracketMatches.length){
+      if(!latestCompleted && resolvedBracketMatches.length){
         const previousKey=asianPreviousMatchKey(bracketMatches[0].key);
         if(previousKey){
           try{
@@ -579,8 +579,27 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
         .filter(item=>!item.start||Date.parse(item.start)>=Date.now()-6*60*60*1000)
         .sort((a,b)=>(a.start?Date.parse(a.start):Number.MAX_SAFE_INTEGER)-(b.start?Date.parse(b.start):Number.MAX_SAFE_INTEGER));
 
-      if(bracketMatches.length){
-        const next=bracketMatches[0];
+      const scheduledEalaMatches=allScheduleRows
+        .filter(row=>asianContainsEala(row)&&!asianMatchCompleted(row))
+        .map(row=>{
+          const info=row.Info&&typeof row.Info==="object"?row.Info as Row:{};
+          const ealaHome=asianContainsEala(row.Home);
+          const opponentName=asianSideName(ealaHome?row.Away:row.Home);
+          return {
+            key:asianRowKey(row),
+            opponent:opponentName||"TBA",
+            start:asianMatchTimestamp(row),
+            round:asianRoundName(row),
+            venue:asianText(info.VenueDesc)||asianText(row.VenueDesc)||venue||null
+          };
+        })
+        .filter(item=>item.key&&(!item.start||Date.parse(item.start)>=Date.now()-6*60*60*1000))
+        .sort((a,b)=>(a.start?Date.parse(a.start):Number.MAX_SAFE_INTEGER)-(b.start?Date.parse(b.start):Number.MAX_SAFE_INTEGER));
+
+      const resolvedBracketMatches=bracketMatches.length?bracketMatches:scheduledEalaMatches;
+
+      if(resolvedBracketMatches.length){
+        const next=resolvedBracketMatches[0];
         const dailyRows=await asianDailyScheduleRows();
         const allScheduleRows=[...scheduleRows,...dailyRows];
         const fullWindow=asianEventWindow(allScheduleRows);
