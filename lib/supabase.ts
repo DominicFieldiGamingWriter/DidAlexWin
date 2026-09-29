@@ -207,8 +207,25 @@ function grandSlamYears(matches: SupabaseMatch[]){
   return result;
 }
 
+function matchTimestamp(match: SupabaseMatch) {
+  const rawTimestamp = exactMatchTimestamp(match.raw_json);
+  if (!Number.isNaN(rawTimestamp)) return rawTimestamp;
+
+  for (const value of [match.match_start, match.match_date]) {
+    if (typeof value !== "string" || !value) continue;
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  return Number.NEGATIVE_INFINITY;
+}
+
+function newestFirst(matches: SupabaseMatch[]) {
+  return [...matches].sort((a, b) => matchTimestamp(b) - matchTimestamp(a));
+}
+
 function latestMatch(matches: SupabaseMatch[]): WtaMatch | null {
-  const latest = matches.find((match) => match.eala_won !== null && match.eala_won !== undefined);
+  const latest = newestFirst(matches).find((match) => match.eala_won !== null && match.eala_won !== undefined);
   return latest ? {
     ...latest.raw_json,
     eala_won: latest.eala_won,
@@ -223,7 +240,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
     const seasonYear=new Date().getUTCFullYear();
     const [matches, statsRows, seasonRows, rankings, nextRows] = await Promise.all([
       fetchTable<SupabaseMatch>(
-        `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,match_date,round_name,eala_won,raw_json&order=match_start.desc.nullslast,match_date.desc.nullslast&limit=500`
+        `eala_matches?player_id=eq.${EALA_ID}&category=eq.singles&status=eq.completed&select=match_start,match_date,round_name,eala_won,raw_json&limit=500`
       ),
       fetchTable<SupabaseStats>(
         `eala_stats?player_id=eq.${EALA_ID}&select=updated_at,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles&limit=1`
@@ -249,11 +266,12 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       rankings.find((row) => row.ranking_type === "doubles")?.ranking ?? null;
 
     const next = nextRows[0];
+    const orderedMatches = newestFirst(matches);
 
     return {
       lastUpdated: stats.updated_at ?? null,
-      latestMatch: latestMatch(matches),
-      recentSingles: recentSingles(matches),
+      latestMatch: latestMatch(orderedMatches),
+      recentSingles: recentSingles(orderedMatches),
       nextMatch: next
         ? {
             tournament: next.tournament,
@@ -305,7 +323,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       doublesTitles: season?.doubles_titles ?? stats.doubles_titles ?? 0,
       highestSinglesRank: stats.highest_singles_ranking ?? null,
       highestDoublesRank: stats.highest_doubles_ranking ?? null,
-      grandSlams: grandSlamYears(matches),
+      grandSlams: grandSlamYears(orderedMatches),
     };
   } catch (error) {
     console.error("Supabase dashboard read failed:", error);
