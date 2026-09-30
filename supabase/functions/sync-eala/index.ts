@@ -254,8 +254,17 @@ function asianResultMatch(value:unknown):Row|null {
   }
   if(!value||typeof value!=="object")return null;
   const o=value as Row;
-  if(("Home" in o||"Away" in o) && (asianContainsEala(o.Home)||asianContainsEala(o.Away)))return o;
-  const competitors=o.Competitors;
+  if(
+    ("Home" in o||"Away" in o||"home" in o||"away" in o) &&
+    (asianContainsEala(o.Home??o.home)||asianContainsEala(o.Away??o.away))
+  ){
+    return {
+      ...o,
+      Home:o.Home??o.home,
+      Away:o.Away??o.away
+    };
+  }
+  const competitors=o.Competitors ?? o.competitors;
   if(Array.isArray(competitors)&&competitors.some(asianContainsEala)){
     return {
       ...o,
@@ -350,6 +359,13 @@ function asianScoreText(value:unknown):string {
 }
 
 function asianFindScore(value:unknown):string {
+  if(value&&typeof value==="object"){
+    const o=value as Row;
+    for(const key of ["ResDetail","ResultDetail","resDetail","resultDetail","Score","Scores","SetScores","score","scores","ResultText","ScoreText","result"]){
+      const direct=asianScoreText(o[key]);
+      if(direct)return direct;
+    }
+  }
   const direct=asianScoreText(value);
   if(direct)return direct;
   if(Array.isArray(value)){
@@ -361,10 +377,6 @@ function asianFindScore(value:unknown):string {
   }
   if(value&&typeof value==="object"){
     const o=value as Row;
-    for(const key of ["ResDetail","Result","Results","Competitors","Score","Scores","SetScores","score","scores"]){
-      const found=asianFindScore(o[key]);
-      if(found)return found;
-    }
     for(const item of Object.values(o)){
       const found=asianFindScore(item);
       if(found)return found;
@@ -630,7 +642,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+resultKey);
           const resultMatch=asianResultMatch(resultPayload);
           const scheduleMatch=allScheduleRows.find(row=>asianRowKey(row)===resultKey)||null;
-          const resolvedMatch=resultMatch||scheduleMatch;
+          const resolvedMatch=scheduleMatch||resultMatch;
           if(resolvedMatch){
             const saved=await upsertAsianCompletedResult(resolvedMatch, allScheduleRows, resultPayload, resultKey);
             if(saved)latestCompleted=resolvedMatch;
@@ -945,6 +957,16 @@ async function sync(force=false){
       rc++;
     }
     const cy=(a:Row[])=>a.filter(m=>completed(m)&&seasonYear(m)===year);
+    const asianGamesCandidate=await syncAsianGamesCandidate();
+    if(asianGamesCandidate)candidates.push(asianGamesCandidate);
+
+    const asianStatRows=await q(
+      "select eala_won from public.eala_matches where player_id=$1 and category='singles' and tournament_name ilike '%Asian Games%' and eala_won is not null",
+      [EALA_ID]
+    );
+    const asianWins=asianStatRows.filter((row:Row)=>row.eala_won===true).length;
+    const asianLosses=asianStatRows.filter((row:Row)=>row.eala_won===false).length;
+
     const cs=cy(singles),cd=cy(doubles);
     const roundRank=(r:string)=>({R128:1,R64:2,R32:3,R16:4,Q:5,S:6,F:7} as Record<string,number>)[r]??0;
     const wins=(a:Row[])=>a.filter(m=>won(m)===true).length;
@@ -965,8 +987,8 @@ async function sync(force=false){
       const rank=stageRank(m),current=bestRank[key]??0,currentYear=grandSlams[key].bestYear;
       if(rank>current || (rank===current && year!==null && (currentYear===null || Number(year)>Number(currentYear)))){ bestRank[key]=rank; grandSlams[key].best=bestLabel(m); grandSlams[key].bestYear=year===null?null:Number(year); }
     }
-    await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
-    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),highest_doubles_ranking=least(coalesce(public.eala_stats.highest_doubles_ranking,excluded.highest_doubles_ranking),excluded.highest_doubles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs),losses(cs),wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
+    await q("insert into public.eala_season_stats(player_id,season_year,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,now()) on conflict(player_id,season_year) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,year,wins(cs)+asianWins,losses(cs)+asianLosses,wins(cd),losses(cd),titles(cs),titles(cd),JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",season_year:year,synced_at:new Date().toISOString()})]);
+    await q("insert into public.eala_stats(player_id,singles_wins,singles_losses,doubles_wins,doubles_losses,singles_titles,doubles_titles,highest_singles_ranking,highest_doubles_ranking,grand_slam_singles,grand_slam_doubles,raw_json,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now()) on conflict(player_id) do update set singles_wins=excluded.singles_wins,singles_losses=excluded.singles_losses,doubles_wins=excluded.doubles_wins,doubles_losses=excluded.doubles_losses,singles_titles=excluded.singles_titles,doubles_titles=excluded.doubles_titles,highest_singles_ranking=least(coalesce(public.eala_stats.highest_singles_ranking,excluded.highest_singles_ranking),excluded.highest_singles_ranking),highest_doubles_ranking=least(coalesce(public.eala_stats.highest_doubles_ranking,excluded.highest_doubles_ranking),excluded.highest_doubles_ranking),grand_slam_singles=excluded.grand_slam_singles,grand_slam_doubles=excluded.grand_slam_doubles,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,wins(cs)+asianWins,losses(cs)+asianLosses,wins(cd),losses(cd),titles(cs),titles(cd),sRank.ranking,dRank.ranking,JSON.stringify(grandSlams),"{}",JSON.stringify({source:"WTA",synced_at:new Date().toISOString(),season_year:year})]);
     const upcoming=singles
       .filter(m=>!completed(m)&&text(m.player_2)!=="BYE")
       .map(m=>({m,d:knownMatchDate(m),start:matchStart(m)}))
@@ -998,9 +1020,6 @@ async function sync(force=false){
 
     const wtaTournamentCandidate=await discoverWtaTournamentCandidate();
     if(wtaTournamentCandidate)candidates.push(wtaTournamentCandidate);
-
-    const asianGamesCandidate=await syncAsianGamesCandidate();
-    if(asianGamesCandidate)candidates.push(asianGamesCandidate);
 
     let selectedNextMatch=selectNextMatchCandidate(candidates);
 
