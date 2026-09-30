@@ -403,20 +403,20 @@ function asianExplicitWinner(value:unknown,ealaIsHome:boolean):boolean|null {
   return null;
 }
 
-async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultPayload:unknown) {
+async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultPayload:unknown, sourceKey="") {
   const info=match.Info&&typeof match.Info==="object"?match.Info as Row:{};
-  const key=asianRowKey(match);
+  const key=sourceKey||asianRowKey(match);
   if(!key)return false;
-  const ealaIsHome=asianContainsEala(match.Home);
-  const opponent=asianSideName(ealaIsHome?match.Away:match.Home)||"Opponent";
   const scheduledRow=scheduleRows.find(row=>asianRowKey(row)===key)||null;
+  const ealaIsHome=asianContainsEala(match.Home ?? scheduledRow?.Home);
+  const opponent=asianSideName(ealaIsHome?(match.Away ?? scheduledRow?.Away):(match.Home ?? scheduledRow?.Home))||"Opponent";
   const matchStart=scheduledRow?asianMatchTimestamp(scheduledRow):asianMatchTimestamp(match);
   const score=asianFindScore(resultPayload)||asianFindScore(match);
   const ealaWon=asianScoreWinner(score,ealaIsHome)??asianExplicitWinner(resultPayload,ealaIsHome)??asianExplicitWinner(match,ealaIsHome);
   if(ealaWon===null)return false;
 
   const eventId=stableEventId({match_key:key}, "asian-singles");
-  const round=asianRoundName(match);
+  const round=scheduledRow ? asianRoundName(scheduledRow) : asianRoundName(match);
   const winner=ealaWon?(ealaIsHome?1:2):(ealaIsHome?2:1);
   const rawJson={
     source:"Bornan official Aichi-Nagoya 2026 results",
@@ -507,7 +507,7 @@ function asianDateOffset(offset:number):string {
 }
 
 async function asianDailyScheduleRows():Promise<Row[]> {
-  const offsets=[0,1,2];
+  const offsets=[-2,-1,0,1,2];
   const payloads=await Promise.all(offsets.map(async offset=>{
     try {
       return await getBornanJson(ASIAN_GAMES_BASE+"/schedule/daily/"+asianDateOffset(offset));
@@ -538,7 +538,9 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
     const schedulePayload=await getBornanJson(ASIAN_GAMES_BASE+"/schedule/event/"+ASIAN_GAMES_EVENT);
     const scheduleRows=asianScheduleRows(schedulePayload);
-    const window=asianEventWindow(scheduleRows);
+    const dailyRows=await asianDailyScheduleRows();
+    const allScheduleRows=[...scheduleRows,...dailyRows];
+    const window=asianEventWindow(allScheduleRows);
     const venue=window.nextSlot
       ? asianText(window.nextSlot.VenueDesc)||
         (window.nextSlot.Venue&&typeof window.nextSlot.Venue==="object"?asianText((window.nextSlot.Venue as Row).Desc):"")
@@ -627,9 +629,11 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
         try{
           const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+resultKey);
           const resultMatch=asianResultMatch(resultPayload);
-          if(resultMatch){
-            const saved=await upsertAsianCompletedResult(resultMatch, allScheduleRows, resultPayload);
-            if(saved)latestCompleted=resultMatch;
+          const scheduleMatch=allScheduleRows.find(row=>asianRowKey(row)===resultKey)||null;
+          const resolvedMatch=resultMatch||scheduleMatch;
+          if(resolvedMatch){
+            const saved=await upsertAsianCompletedResult(resolvedMatch, allScheduleRows, resultPayload, resultKey);
+            if(saved)latestCompleted=resolvedMatch;
           }
         }catch(error){
           console.error("Asian Games completed-result lookup failed:",resultKey,error);
@@ -638,8 +642,6 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
 
       if(resolvedBracketMatches.length){
         const next=resolvedBracketMatches[0];
-        const dailyRows=await asianDailyScheduleRows();
-        const allScheduleRows=[...scheduleRows,...dailyRows];
         const fullWindow=asianEventWindow(allScheduleRows);
         const scheduledRow=next.key
           ? allScheduleRows.find(row=>asianRowKey(row)===next.key)||null
@@ -816,7 +818,7 @@ const SYNC_INTERVAL_15_MINUTES = 15 * 60 * 1000;
 
 async function syncSchedule() {
   const now = Date.now();
-  const [nextRows, latestRows, lastRows] = await Promise.all([
+  const [nextRows, latestRows, lastRows, recentAsianRows] = await Promise.all([
     q(
       "select tournament, match_start, tournament_start, tournament_end from public.eala_next_match where player_id=$1 limit 1",
       [EALA_ID]
@@ -827,12 +829,17 @@ async function syncSchedule() {
     ),
     q(
       "select started_at from public.eala_sync_runs where success=true order by started_at desc limit 1"
+    ),
+    q(
+      "select coalesce(match_start, match_date::timestamptz) as asian_at from public.eala_matches where player_id=$1 and category='singles' and tournament_name ilike '%Asian Games%' and eala_won is not null and coalesce(match_start, match_date::timestamptz) >= now() - interval '72 hours' order by coalesce(match_start, match_date::timestamptz) desc limit 1",
+      [EALA_ID]
     )
   ]);
 
   const next = nextRows[0] as Row | undefined;
   const latest = latestRows[0] as Row | undefined;
   const last = lastRows[0] as Row | undefined;
+  const recentAsian = recentAsianRows[0] as Row | undefined;
 
   const nextStart = next?.match_start ? Date.parse(String(next.match_start)) : NaN;
   const tournamentStart = next?.tournament_start ? Date.parse(String(next.tournament_start)) : NaN;
@@ -848,6 +855,9 @@ async function syncSchedule() {
     Number.isFinite(latestAt) &&
     latestAt >= now - 6 * 60 * 60 * 1000 &&
     latestAt <= now;
+
+  const recentAsianAt = recentAsian?.asian_at ? Date.parse(String(recentAsian.asian_at)) : NaN;
+  const recentAsianMatch = Number.isFinite(recentAsianAt) && recentAsianAt >= now - 72 * 60 * 60 * 1000;
 
   const tournamentActive =
     Number.isFinite(tournamentStart) &&
@@ -869,7 +879,7 @@ async function syncSchedule() {
   let mode = "idle";
 
   const asianGamesActive = tournamentActive && String(next?.tournament ?? "").toLowerCase().includes("asian games");
-  if(imminentMatch||recentMatch||asianGamesActive){
+  if(imminentMatch||recentMatch||asianGamesActive||recentAsianMatch){
     interval=SYNC_INTERVAL_15_MINUTES;
     mode=asianGamesActive ? "asian_games_match_window" : "match_window";
   }else if(tournamentActive||tournamentImminent||tournamentRecentlyEnded){
