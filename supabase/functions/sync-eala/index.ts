@@ -956,6 +956,7 @@ async function sync(force=false){
       await q("insert into public.eala_rankings(player_id,ranking_type,ranking,ranking_date,raw_json,updated_at) values($1,$2,$3,$4,$5::jsonb,now()) on conflict(player_id,ranking_type,ranking_date) do update set ranking=excluded.ranking,raw_json=excluded.raw_json,updated_at=now()",[EALA_ID,kind,ranking,rankingDate,JSON.stringify(item.row)]);
       rc++;
     }
+    const candidates:NextMatchCandidate[]=[];
     const cy=(a:Row[])=>a.filter(m=>completed(m)&&seasonYear(m)===year);
     const asianGamesCandidate=await syncAsianGamesCandidate();
     if(asianGamesCandidate)candidates.push(asianGamesCandidate);
@@ -994,8 +995,6 @@ async function sync(force=false){
       .map(m=>({m,d:knownMatchDate(m),start:matchStart(m)}))
       .filter(x=>x.d&&Date.parse(x.d+"T23:59:59Z")>=Date.now()-3600000)
       .sort((a,b)=>Date.parse(a.d)-Date.parse(b.d))[0];
-
-    const candidates:NextMatchCandidate[]=[];
 
     if(upcoming){
       const m=upcoming.m;
