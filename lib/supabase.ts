@@ -154,6 +154,32 @@ function orientedScore(value: unknown, ealaWon: boolean | null | undefined): str
   return sets.map((set) => ealaIsFirst ? set.first + "-" + set.second : set.second + "-" + set.first).join(" ");
 }
 
+function canonicalUiMatchKey(match: SupabaseMatch) {
+  const raw = match.raw_json;
+  const players = [raw.player_1, raw.player_2, raw.player_3, raw.player_4]
+    .map((value) => (value === null || value === undefined ? "" : String(value)))
+    .filter((value) => value && !/^BYE$/i.test(value))
+    .sort();
+  const tournamentKey = String(raw.tourn_nbr ?? raw.tournamentId ?? raw.TournamentName ?? "");
+  const yearKey = String(raw.tourn_year ?? "");
+  const roundKey = String(match.round_name ?? raw.round_name ?? "");
+  if (players.length >= 2) return [tournamentKey, yearKey, roundKey, players.join("|")].join("::");
+  const rawDate = raw.MatchTimeStamp ?? match.match_start ?? match.match_date ?? "";
+  return [tournamentKey, yearKey, roundKey, String(rawDate), opponentName(raw)].join("::");
+}
+function dedupeDashboardMatches(matches: SupabaseMatch[]) {
+  const byKey = new Map<string, SupabaseMatch>();
+  const quality = (item: SupabaseMatch) =>
+    (item.match_start ? 4 : 0) +
+    (item.raw_json.TournamentName ? Math.min(String(item.raw_json.TournamentName).length, 100) / 100 : 0) +
+    (item.raw_json.scores ? 2 : 0);
+  for (const match of matches) {
+    const key = canonicalUiMatchKey(match);
+    const existing = byKey.get(key);
+    if (!existing || quality(match) > quality(existing)) byKey.set(key, match);
+  }
+  return [...byKey.values()];
+}
 function recentSingles(matches: SupabaseMatch[]): DashboardData["recentSingles"] {
   return [...matches]
     .filter((m) => m.eala_won !== null && m.eala_won !== undefined)
@@ -266,7 +292,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       rankings.find((row) => row.ranking_type === "doubles")?.ranking ?? null;
 
     const next = nextRows[0];
-    const orderedMatches = newestFirst(matches);
+    const orderedMatches = newestFirst(dedupeDashboardMatches(matches));
 
     return {
       lastUpdated: stats.updated_at ?? null,
