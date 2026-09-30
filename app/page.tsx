@@ -311,7 +311,7 @@ export default async function Home() {
               {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.eala[index] ?? "—"}</strong>)}
             </div>
             <div className={`score-row ${hasResult && !won ? "score-row-winner" : ""}`}>
-              <div className="score-player"><strong>{latestOpponent(latest)}</strong>{hasResult && !won && latest && <span className="winner-tag">WINNER</span>}</div>
+              <div className="score-player"><strong>{displayPersonName(latestOpponent(latest))}</strong>{hasResult && !won && latest && <span className="winner-tag">WINNER</span>}</div>
               {[0,1,2].map((index)=><strong className="set-score" key={index}>{scores.opponent[index] ?? "—"}</strong>)}
             </div>
           </div>
