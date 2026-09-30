@@ -637,20 +637,31 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
         if(completedKey)resultKeys.add(completedKey);
       }
 
+      const resultDiagnostics:Array<Record<string,unknown>>=[];
       for(const resultKey of resultKeys){
         try{
           const resultPayload=await getBornanJson(ASIAN_GAMES_BASE+"/results/"+resultKey);
           const resultMatch=asianResultMatch(resultPayload);
           const scheduleMatch=allScheduleRows.find(row=>asianRowKey(row)===resultKey)||null;
           const resolvedMatch=scheduleMatch||resultMatch;
+          let saved=false;
           if(resolvedMatch){
-            const saved=await upsertAsianCompletedResult(resolvedMatch, allScheduleRows, resultPayload, resultKey);
+            saved=await upsertAsianCompletedResult(resolvedMatch, allScheduleRows, resultPayload, resultKey);
             if(saved)latestCompleted=resolvedMatch;
           }
+          resultDiagnostics.push({
+            key:resultKey,
+            resultMatch:Boolean(resultMatch),
+            scheduleMatch:Boolean(scheduleMatch),
+            parsedScore:asianFindScore(resultPayload),
+            saved
+          });
         }catch(error){
+          resultDiagnostics.push({key:resultKey,error:String(error)});
           console.error("Asian Games completed-result lookup failed:",resultKey,error);
         }
       }
+      if(resultDiagnostics.length)console.log("Asian Games result scan",JSON.stringify(resultDiagnostics));
 
       if(resolvedBracketMatches.length){
         const next=resolvedBracketMatches[0];
