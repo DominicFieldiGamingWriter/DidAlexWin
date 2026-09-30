@@ -598,6 +598,20 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
       // Query Bornan's result endpoint for the previous match immediately.
       // Do not depend on the bracket status changing to "completed".
       const resultKeys=new Set<string>();
+
+      // Prefer exact Eala schedule records that have already started. This
+      // avoids assuming Bornan's bracket round-code sequence when a match has
+      // finished but the bracket status has not yet been updated.
+      const nowMs=Date.now();
+      for(const row of allScheduleRows){
+        if(!asianContainsEala(row))continue;
+        const key=asianRowKey(row);
+        const start=asianMatchTimestamp(row);
+        if(key && start && Date.parse(start)<=nowMs+30*60*1000)resultKeys.add(key);
+      }
+
+      // Keep the previous-key lookup as a secondary source for feeds where
+      // the daily schedule does not yet expose the completed unit.
       for(const seed of [resolvedBracketMatches[0]?.key,existingSourceKey]){
         if(seed){
           const previousKey=asianPreviousMatchKey(seed);
