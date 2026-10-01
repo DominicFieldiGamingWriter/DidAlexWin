@@ -624,6 +624,14 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
         if(key && start && Date.parse(start)<=nowMs+30*60*1000)resultKeys.add(key);
       }
 
+      // Bornan's bracket state can lag the actual result. Probe the known
+      // women's-singles round keys directly as well, so a completed match is
+      // not dependent on the bracket endpoint changing state first.
+      const directRoundKeys=["16FNL","8FNL","QFNL","SFNL","FNL"];
+      for(const round of directRoundKeys){
+        resultKeys.add(ASIAN_GAMES_EVENT+"."+round+".000100--");
+      }
+
       // Keep the previous-key lookup as a secondary source for feeds where
       // the daily schedule does not yet expose the completed unit.
       for(const seed of [resolvedBracketMatches[0]?.key,existingSourceKey]){
