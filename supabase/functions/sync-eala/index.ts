@@ -890,7 +890,8 @@ async function refreshCanonicalMatches() {
              x.source_match_id desc
   `,[EALA_ID]);
 }
-\nconst SYNC_INTERVAL_12_HOURS = 12 * 60 * 60 * 1000;
+
+const SYNC_INTERVAL_12_HOURS = 12 * 60 * 60 * 1000;
 const SYNC_INTERVAL_1_HOUR = 60 * 60 * 1000;
 const SYNC_INTERVAL_15_MINUTES = 15 * 60 * 1000;
 
