@@ -879,8 +879,8 @@ async function refreshCanonicalMatches() {
         case when m.eala_won is not null then coalesce(m.match_start,m.match_date::timestamptz) end as played_at,
         coalesce(m.raw_json->'opponent'->>'fullName',
                  case when m.raw_json->>'player_1'=m.player_id::text then m.raw_json->>'team_name_2'
-                      else m.raw_json->>'team_name_1' end),
-        m.eala_won,m.raw_json->>'scores',m.surface,m.raw_json->>'city',m.raw_json
+                      else m.raw_json->>'team_name_1' end) as opponent_name,
+        m.eala_won,m.raw_json->>'scores' as score,m.surface,m.raw_json->>'city' as venue,m.raw_json
       from public.eala_matches m
       where m.player_id=$1
     ) x
