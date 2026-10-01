@@ -916,8 +916,8 @@ async function refreshCanonicalMatches() {
               ),'|'))
         end as canonical_key,
         case
-          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.SINGLES.%' then 'singles'
-          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.DOUBLES.%' then 'doubles'
+          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.SINGLES-----------.%' then 'singles'
+          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.DOUBLES-----------.%' then 'doubles'
           else m.category
         end as category,
         case when m.eala_won is not null then 'completed'
@@ -933,8 +933,8 @@ async function refreshCanonicalMatches() {
         m.round_name,m.match_start as scheduled_at,
         case when m.eala_won is not null then coalesce(m.match_start,m.match_date::timestamptz) end as played_at,
         case
-          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.SINGLES.%'
-            or coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.DOUBLES.%'
+          when coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.SINGLES-----------.%'
+            or coalesce(m.raw_json->>'source_match_key',m.custom_id) like 'W.DOUBLES-----------.%'
             then case
               when m.raw_json->>'player_1'=m.player_id::text
                 then nullif(m.raw_json->>'player_2','')
