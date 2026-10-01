@@ -862,11 +862,15 @@ async function refreshCanonicalMatches() {
             then 'bornan|'||coalesce(m.raw_json->>'source_match_key',m.custom_id,m.event_id::text)
           else
             'wta|'||
-            coalesce(nullif(m.raw_json->>'tourn_nbr',''),coalesce(m.tournament_id::text,m.tournament_name,''))||'|'||
             coalesce(nullif(m.raw_json->>'tourn_year',''),coalesce(m.season_id::text,''))||'|'||
             coalesce(m.round_name,'')||'|'||
-            md5(coalesce(m.raw_json->>'player_1','')||'|'||coalesce(m.raw_json->>'player_2','')||'|'||
-                coalesce(m.raw_json->>'player_3','')||'|'||coalesce(m.raw_json->>'player_4',''))
+            coalesce(coalesce(m.match_start,m.match_date::timestamptz)::date::text,'')||'|'||
+            md5(array_to_string(array_remove(array[
+              nullif(m.raw_json->>'player_1',''),
+              nullif(m.raw_json->>'player_2',''),
+              nullif(m.raw_json->>'player_3',''),
+              nullif(m.raw_json->>'player_4','')
+            ],null),'|'))
         end as canonical_key,
         m.category,
         case when m.eala_won is not null then 'completed'
