@@ -330,8 +330,8 @@ function asianMatchCompleted(match:Row):boolean {
 
 function asianScoreText(value:unknown):string {
   if(typeof value==="string"){
-    const normalized=value.replace(/[–—]/g,"-").replace(/\\s+/g," ").trim();
-    const pairs=normalized.match(/\\d+\\s*-\\s*\\d+/g);
+    const normalized=value.replace(/[–—]/g,"-").replace(/\s+/g," ").trim();
+    const pairs=normalized.match(/\d+\s*-\s*\d+(?:\(\d+\))?/g);
     if(pairs&&pairs.length>=2)return pairs.join(" ");
     return "";
   }
@@ -350,9 +350,22 @@ function asianScoreText(value:unknown):string {
   }
   if(value&&typeof value==="object"){
     const o=value as Row;
-    for(const key of ["Score","Scores","SetScores","score","scores","ResultText","ScoreText","result"]){
+    for(const key of ["ResDetail","ResultDetail","resDetail","resultDetail","Score","Scores","SetScores","score","scores","ResultText","ScoreText","result"]){
       const parsed=asianScoreText(o[key]);
       if(parsed)return parsed;
+    }
+    const periods=o.Periods??o.periods;
+    if(Array.isArray(periods)){
+      const pairs=periods.map(period=>{
+        if(!period||typeof period!=="object")return "";
+        const p=period as Row;
+        const a=p.ResHome??p.resHome??p.Home??p.home;
+        const b=p.ResAway??p.resAway??p.Away??p.away;
+        return a!==undefined&&b!==undefined&&Number.isFinite(Number(a))&&Number.isFinite(Number(b))
+          ? Number(a)+"-"+Number(b)
+          : "";
+      }).filter(Boolean);
+      if(pairs.length>=2)return pairs.join(" ");
     }
   }
   return "";
@@ -386,10 +399,14 @@ function asianFindScore(value:unknown):string {
 }
 
 function asianScoreWinner(score:string,ealaIsHome:boolean):boolean|null {
-  const sets=score.match(/\\d+\\s*-\\s*\\d+/g)?.map(pair=>pair.split("-").map(v=>Number(v)))??[];
-  if(sets.length<2)return null;
-  const homeSets=sets.filter(([a,b])=>a>b).length;
-  const awaySets=sets.filter(([a,b])=>b>a).length;
+  const sets=score.match(/\d+\s*-\s*\d+(?:\(\d+\))?/g)?.map(pair=>{
+    const [a,b]=pair.split("-").map(v=>Number(v.replace(/\(.*/, ""));
+    return [a,b];
+  })??[];
+  const valid=sets.filter(([a,b])=>Number.isFinite(a)&&Number.isFinite(b));
+  if(valid.length<2)return null;
+  const homeSets=valid.filter(([a,b])=>a>b).length;
+  const awaySets=valid.filter(([a,b])=>b>a).length;
   if(homeSets===awaySets)return null;
   const homeWon=homeSets>awaySets;
   return ealaIsHome?homeWon:!homeWon;
@@ -427,7 +444,9 @@ async function upsertAsianCompletedResult(match:Row, scheduleRows:Row[], resultP
   const ealaWon=asianScoreWinner(score,ealaIsHome)??asianExplicitWinner(resultPayload,ealaIsHome)??asianExplicitWinner(match,ealaIsHome);
   if(ealaWon===null)return false;
 
-  const eventId=stableEventId({match_key:key}, "asian-singles");
+  // Asian Games source keys are the stable identity. Use a synthetic negative
+  // event id so these rows cannot collide with WTA's positive event ids.
+  const eventId=-stableEventId({tourn_nbr:key}, "asian-singles");
   const round=scheduledRow ? asianRoundName(scheduledRow) : asianRoundName(match);
   const winner=ealaWon?(ealaIsHome?1:2):(ealaIsHome?2:1);
   const rawJson={
@@ -627,7 +646,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
       // Bornan's bracket state can lag the actual result. Probe the known
       // women's-singles round keys directly as well, so a completed match is
       // not dependent on the bracket endpoint changing state first.
-      const directRoundKeys=["16FNL","8FNL","QFNL","SFNL","FNL"];
+      const directRoundKeys=["8FNL","QFNL","SFNL","FNL"];
       for(const round of directRoundKeys){
         resultKeys.add(ASIAN_GAMES_EVENT+"."+round+".000100--");
       }
@@ -710,6 +729,11 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
     }catch(error){
       console.error("Asian Games bracket lookup failed:",error);
     }
+
+    // If Eala has already completed a match in this event but Bornan exposes
+    // no future Eala match, the Asian Games leg is over for her. Do not leave a
+    // stale event-only TBA record in eala_next_match.
+    if(latestCompleted)return null;
 
     // The source confirms that Eala is entered and the event is scheduled.
     // No opponent or exact match date is invented until the live competition feed exposes it.
