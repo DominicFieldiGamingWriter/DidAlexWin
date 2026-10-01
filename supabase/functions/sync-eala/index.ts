@@ -873,7 +873,7 @@ async function refreshCanonicalMatches() {
              when m.match_start is not null then 'scheduled'
              else 'event_only' end as state,
         m.tournament_name,m.tournament_id,
-        case when m.raw_json->>'TournamentLevel'='GS' or m.raw_json->>'TournamentType'='GS' then 'Grand Slam' else null end,
+        case when m.raw_json->>'TournamentLevel'='GS' or m.raw_json->>'TournamentType'='GS' then 'Grand Slam' else null end as tournament_level,
         coalesce(m.season_id,nullif(m.raw_json->>'tourn_year','')::integer),
         m.round_name,m.match_start,
         case when m.eala_won is not null then coalesce(m.match_start,m.match_date::timestamptz) end,
