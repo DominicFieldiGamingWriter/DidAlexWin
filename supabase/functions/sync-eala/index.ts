@@ -835,7 +835,62 @@ async function dbHttpGetJson(url: string) {
 }
 
 
-const SYNC_INTERVAL_12_HOURS = 12 * 60 * 60 * 1000;
+
+async function refreshCanonicalMatches() {
+  // The canonical table is the authoritative match ledger. It is rebuilt from
+  // the successfully ingested source rows so stale/duplicate projections cannot
+  // survive a source correction.
+  await q("delete from public.eala_canonical_matches where player_id=$1",[EALA_ID]);
+  await q(`
+    insert into public.eala_canonical_matches
+      (player_id,source,source_match_id,canonical_key,category,state,tournament_name,tournament_id,tournament_level,season_year,round_name,scheduled_at,played_at,opponent_name,eala_won,score,surface,venue,raw_json,source_seen_at,updated_at)
+    select distinct on (x.canonical_key)
+      x.player_id,x.source,x.source_match_id,x.canonical_key,x.category,x.state,x.tournament_name,
+      x.tournament_id,x.tournament_level,x.season_year,x.round_name,x.scheduled_at,x.played_at,
+      x.opponent_name,x.eala_won,x.score,x.surface,x.venue,x.raw_json,now(),now()
+    from (
+      select
+        m.player_id,
+        case when m.tournament_name ilike '%Asian Games%' then 'bornan' else 'wta' end as source,
+        case
+          when m.tournament_name ilike '%Asian Games%'
+            then coalesce(m.raw_json->>'source_match_key',m.custom_id,m.event_id::text)
+          else coalesce(nullif(m.raw_json->>'id',''),m.event_id::text)
+        end as source_match_id,
+        case
+          when m.tournament_name ilike '%Asian Games%'
+            then 'bornan|'||coalesce(m.raw_json->>'source_match_key',m.custom_id,m.event_id::text)
+          else
+            'wta|'||
+            coalesce(nullif(m.raw_json->>'tourn_nbr',''),coalesce(m.tournament_id::text,m.tournament_name,''))||'|'||
+            coalesce(nullif(m.raw_json->>'tourn_year',''),coalesce(m.season_id::text,''))||'|'||
+            coalesce(m.round_name,'')||'|'||
+            md5(coalesce(m.raw_json->>'player_1','')||'|'||coalesce(m.raw_json->>'player_2','')||'|'||
+                coalesce(m.raw_json->>'player_3','')||'|'||coalesce(m.raw_json->>'player_4',''))
+        end as canonical_key,
+        m.category,
+        case when m.eala_won is not null then 'completed'
+             when m.match_start is not null then 'scheduled'
+             else 'event_only' end as state,
+        m.tournament_name,m.tournament_id,
+        case when m.raw_json->>'TournamentLevel'='GS' or m.raw_json->>'TournamentType'='GS' then 'Grand Slam' else null end,
+        coalesce(m.season_id,nullif(m.raw_json->>'tourn_year','')::integer),
+        m.round_name,m.match_start,
+        case when m.eala_won is not null then coalesce(m.match_start,m.match_date::timestamptz) end,
+        coalesce(m.raw_json->'opponent'->>'fullName',
+                 case when m.raw_json->>'player_1'=m.player_id::text then m.raw_json->>'team_name_2'
+                      else m.raw_json->>'team_name_1' end),
+        m.eala_won,m.raw_json->>'scores',m.surface,m.raw_json->>'city',m.raw_json
+      from public.eala_matches m
+      where m.player_id=$1
+    ) x
+    order by x.canonical_key,
+             (x.eala_won is not null) desc,
+             (x.scheduled_at is not null) desc,
+             x.source_match_id desc
+  `,[EALA_ID]);
+}
+\nconst SYNC_INTERVAL_12_HOURS = 12 * 60 * 60 * 1000;
 const SYNC_INTERVAL_1_HOUR = 60 * 60 * 1000;
 const SYNC_INTERVAL_15_MINUTES = 15 * 60 * 1000;
 
@@ -969,7 +1024,7 @@ async function sync(force=false){
     }
     const candidates:NextMatchCandidate[]=[];
     const cy=(a:Row[])=>a.filter(m=>completed(m)&&seasonYear(m)===year);
-    const asianGamesCandidate=await syncAsianGamesCandidate();
+    const asianGamesCandidate=await syncAsianGamesCandidate();\n    await refreshCanonicalMatches();
     if(asianGamesCandidate)candidates.push(asianGamesCandidate);
 
     const asianStatRows=await q(
