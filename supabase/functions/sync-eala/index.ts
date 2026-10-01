@@ -873,12 +873,17 @@ async function refreshCanonicalMatches() {
             coalesce(nullif(m.raw_json->>'tourn_year',''),coalesce(m.season_id::text,''))||'|'||
             coalesce(m.round_name,'')||'|'||
             coalesce(coalesce(m.match_start,m.match_date::timestamptz)::date::text,'')||'|'||
-            md5(array_to_string(array_remove(array[
-              nullif(m.raw_json->>'player_1',''),
-              nullif(m.raw_json->>'player_2',''),
-              nullif(m.raw_json->>'player_3',''),
-              nullif(m.raw_json->>'player_4','')
-            ],null),'|'))
+            md5(array_to_string(
+              ARRAY(
+                SELECT player_id
+                FROM unnest(array_remove(array[
+                  nullif(m.raw_json->>'player_1',''),
+                  nullif(m.raw_json->>'player_2',''),
+                  nullif(m.raw_json->>'player_3',''),
+                  nullif(m.raw_json->>'player_4','')
+                ],null)) AS player_id
+                ORDER BY player_id
+              ),'|'))
         end as canonical_key,
         m.category,
         case when m.eala_won is not null then 'completed'
