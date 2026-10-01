@@ -1025,7 +1025,8 @@ async function sync(force=false){
     }
     const candidates:NextMatchCandidate[]=[];
     const cy=(a:Row[])=>a.filter(m=>completed(m)&&seasonYear(m)===year);
-    const asianGamesCandidate=await syncAsianGamesCandidate();\n    await refreshCanonicalMatches();
+    const asianGamesCandidate=await syncAsianGamesCandidate();
+    await refreshCanonicalMatches();
     if(asianGamesCandidate)candidates.push(asianGamesCandidate);
 
     const asianStatRows=await q(
