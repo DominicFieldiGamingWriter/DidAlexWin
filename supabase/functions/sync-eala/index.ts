@@ -400,7 +400,7 @@ function asianFindScore(value:unknown):string {
 
 function asianScoreWinner(score:string,ealaIsHome:boolean):boolean|null {
   const sets=score.match(/\d+\s*-\s*\d+(?:\(\d+\))?/g)?.map(pair=>{
-    const [a,b]=pair.split("-").map(v=>Number(v.replace(/\(.*/, ""));
+    const [a,b]=pair.split("-").map(v=>Number(v.replace(/\(.*/, "")));
     return [a,b];
   })??[];
   const valid=sets.filter(([a,b])=>Number.isFinite(a)&&Number.isFinite(b));
