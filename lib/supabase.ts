@@ -60,6 +60,21 @@ type NextMatch = {
   tournament_end: string | null;
 };
 
+function isCurrentNextMatch(match: NextMatch, now = Date.now()) {
+  // Exact fixtures expire on their own start time even if the tournament
+  // continues for several more days. Only event-level placeholders use the
+  // tournament window for relevance.
+  const exact = match.match_start || match.match_date;
+  if (exact) {
+    const at = Date.parse(exact);
+    return Number.isFinite(at) && at >= now - 6 * 60 * 60 * 1000;
+  }
+  const end = match.tournament_end ? Date.parse(match.tournament_end) : NaN;
+  if (Number.isFinite(end)) return end >= now - 6 * 60 * 60 * 1000;
+  const start = match.tournament_start ? Date.parse(match.tournament_start) : NaN;
+  return Number.isFinite(start) && start >= now - 60 * 24 * 60 * 60 * 1000;
+}
+
 async function fetchTable<T>(path: string): Promise<T[]> {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: SUPABASE_KEY },
@@ -234,7 +249,8 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
   const seasonDoubles = records(matches, "doubles", seasonYear);
   const careerSingles = records(matches, "singles");
   const careerDoubles = records(matches, "doubles");
-  const next = nextRows[0] ?? null;
+  const candidateNext = nextRows[0] ?? null;
+  const next = candidateNext && isCurrentNextMatch(candidateNext) ? candidateNext : null;
 
   return {
     lastUpdated: latestUpdated,
