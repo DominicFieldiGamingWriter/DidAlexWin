@@ -231,15 +231,12 @@ function latestRanking(rows: Ranking[], type: "singles" | "doubles") {
 export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
   const seasonYear = new Date().getUTCFullYear();
 
-  const [matches, rankings, nextRows] = await Promise.all([
+  const [matches, rankings] = await Promise.all([
     fetchTable<CanonicalMatch>(
       `eala_canonical_matches?player_id=eq.${EALA_ID}&select=source,source_match_id,canonical_key,category,state,tournament_name,tournament_level,season_year,round_name,scheduled_at,played_at,opponent_name,eala_won,score,surface,venue,raw_json,updated_at&limit=1000`
     ),
     fetchTable<Ranking>(
       `eala_rankings?player_id=eq.${EALA_ID}&select=ranking_type,ranking&order=ranking_date.desc&limit=20`
-    ),
-    fetchTable<NextMatch>(
-      `eala_next_match?player_id=eq.${EALA_ID}&select=tournament,round_name,opponent,match_date,match_start,surface,venue,tournament_start,tournament_end&limit=1`
     ),
   ]);
 
@@ -249,7 +246,25 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
   const seasonDoubles = records(matches, "doubles", seasonYear);
   const careerSingles = records(matches, "singles");
   const careerDoubles = records(matches, "doubles");
-  const candidateNext = nextRows[0] ?? null;
+  const canonicalNext = matches
+    .filter(m => m.raw_json?.canonical_role === "next_fixture" && m.state !== "completed" && m.state !== "cancelled")
+    .sort((a,b) => {
+      const aTime = Date.parse(a.scheduled_at ?? String(a.raw_json.match_date ?? a.raw_json.tournament_start ?? ""));
+      const bTime = Date.parse(b.scheduled_at ?? String(b.raw_json.match_date ?? b.raw_json.tournament_start ?? ""));
+      return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER) -
+        (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
+    })[0] ?? null;
+  const candidateNext: NextMatch | null = canonicalNext ? {
+    tournament: canonicalNext.tournament_name ?? "Upcoming tournament",
+    round_name: canonicalNext.round_name,
+    opponent: canonicalNext.opponent_name,
+    match_date: typeof canonicalNext.raw_json.match_date === "string" ? canonicalNext.raw_json.match_date : null,
+    match_start: canonicalNext.scheduled_at,
+    surface: canonicalNext.surface,
+    venue: canonicalNext.venue,
+    tournament_start: typeof canonicalNext.raw_json.tournament_start === "string" ? canonicalNext.raw_json.tournament_start : null,
+    tournament_end: typeof canonicalNext.raw_json.tournament_end === "string" ? canonicalNext.raw_json.tournament_end : null,
+  } : null;
   const next = candidateNext && isCurrentNextMatch(candidateNext) ? candidateNext : null;
 
   return {

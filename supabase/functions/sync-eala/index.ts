@@ -1358,7 +1358,33 @@ async function sync(force=false){
       // tournament placeholders, but expire any specific match whose start passed.
       await q("delete from public.eala_next_match where player_id=$1 and ((coalesce(match_start,match_date::timestamptz) is not null and coalesce(match_start,match_date::timestamptz)<now()-interval '6 hours') or (coalesce(match_start,match_date::timestamptz) is null and tournament_end is not null and tournament_end<now()-interval '6 hours'))",[EALA_ID]);
     }
-    const nextMatchExists=(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID])).length>0;
+        await q("delete from public.eala_canonical_matches where player_id=$1 and raw_json->>'canonical_role'='next_fixture'",[EALA_ID]);
+    if(selectedNextMatch){
+      const nextDate = selectedNextMatch.matchDate || null;
+      const nextTime = selectedNextMatch.matchStart || null;
+      const nextSeason = Number((nextDate || selectedNextMatch.tournamentStart || "").slice(0,4)) || null;
+      const nextSource = selectedNextMatch.source.startsWith("bornan") ? "bornan" : "wta";
+      const nextSourceId = text(selectedNextMatch.rawJson.draw_match_id) ||
+        text(selectedNextMatch.rawJson.match_key) ||
+        String(selectedNextMatch.sourceEventId ?? [selectedNextMatch.tournament,selectedNextMatch.roundName,selectedNextMatch.opponent].join("|"));
+      const nextKey = ["next",nextSource,selectedNextMatch.tournament,selectedNextMatch.roundName,selectedNextMatch.opponent,nextDate || selectedNextMatch.tournamentStart || ""].join("|");
+      const nextState = nextTime || nextDate ? "scheduled" :
+        selectedNextMatch.opponent.trim().toUpperCase() !== "TBA" ? "confirmed" : "event_only";
+      const nextRaw = {
+        ...selectedNextMatch.rawJson,
+        canonical_role:"next_fixture",
+        selected_source:selectedNextMatch.source,
+        match_date:nextDate,
+        tournament_start:selectedNextMatch.tournamentStart,
+        tournament_end:selectedNextMatch.tournamentEnd,
+        confidence:selectedNextMatch.confidence
+      };
+      await q(
+        "insert into public.eala_canonical_matches(player_id,source,source_match_id,canonical_key,category,state,tournament_name,season_year,round_name,scheduled_at,played_at,opponent_name,eala_won,score,surface,venue,raw_json,source_seen_at,updated_at) values($1,$2,$3,$4,'singles',$5,$6,$7,$8,$9,null,$10,null,null,$11,$12,$13::jsonb,now(),now())",
+        [EALA_ID,nextSource,nextSourceId,nextKey,nextState,selectedNextMatch.tournament,nextSeason,selectedNextMatch.roundName,nextTime,selectedNextMatch.opponent,selectedNextMatch.surface,selectedNextMatch.venue,JSON.stringify(nextRaw)]
+      );
+    }
+const nextMatchExists=(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID])).length>0;
     await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
     return {ok:true,singles:sc+drawResults.singles,doubles:dc+drawResults.doubles,drawResults,nextMatch:nextMatchExists};
   }catch(e){
