@@ -126,8 +126,17 @@ function candidateEnd(candidate: NextMatchCandidate): number {
 }
 
 function candidateIsRelevant(candidate: NextMatchCandidate,now=Date.now()): boolean {
-  const end=candidateEnd(candidate);
-  return end===Number.MAX_SAFE_INTEGER||end>=now-6*60*60*1000;
+  // A specific fixture expires based on its own scheduled time, not the end
+  // date of the tournament. Tournament windows are only valid for event-only
+  // placeholders where no opponent or match time has been confirmed.
+  const specificTime = candidate.matchStart || candidate.matchDate;
+  if (specificTime) {
+    const at = Date.parse(specificTime);
+    return Number.isFinite(at) && at >= now - 6 * 60 * 60 * 1000;
+  }
+  const eventEnd = candidate.tournamentEnd ? Date.parse(candidate.tournamentEnd)
+    : candidate.tournamentStart ? Date.parse(candidate.tournamentStart) : NaN;
+  return !Number.isFinite(eventEnd) || eventEnd >= now - 6 * 60 * 60 * 1000;
 }
 
 function selectNextMatchCandidate(candidates: NextMatchCandidate[],now=Date.now()): NextMatchCandidate|null {
@@ -852,6 +861,133 @@ async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,s
   return rows.length;
 }
 
+async function syncRecentWtaTournamentResults(): Promise<{singles:number,doubles:number}> {
+  // The player match-history endpoint can lag behind live tournament results.
+  // Reconcile finished matches from official WTA tournament match feeds for
+  // recent/current tournaments before rebuilding the canonical ledger.
+  try {
+    const now = Date.now();
+    const from = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0,10);
+    const to = new Date(now + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0,10);
+    const payload = await getJson(WTA+"/tournaments/?page=0&pageSize=100&excludeLevels=ITF&from="+from+"&to="+to);
+    const tournaments = records(payload)
+      .map(item => {
+        const group = item.tournamentGroup && typeof item.tournamentGroup === "object" ? item.tournamentGroup as Row : {};
+        return {
+          groupId: num(group.id) ?? num(item.id),
+          year: num(item.year),
+          start: text(item.startDate),
+          end: text(item.endDate),
+          title: text(item.title),
+          surface: text(item.surface),
+          city: text(item.city),
+          level: text(item.level) || text(group.level)
+        };
+      })
+      .filter(t => t.groupId !== null && t.year !== null && Number.isFinite(Date.parse(t.start)) &&
+        Number.isFinite(Date.parse(t.end)) && Date.parse(t.end) >= now - 14 * 24 * 60 * 60 * 1000 &&
+        Date.parse(t.start) <= now + 3 * 24 * 60 * 60 * 1000)
+      .sort((a,b) => Date.parse(b.start)-Date.parse(a.start))
+      .slice(0,10);
+    const singles: Row[] = [];
+    const doubles: Row[] = [];
+    for (const t of tournaments) {
+      try {
+        const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
+        const events = drawEvents(drawPayload);
+        const roundByMatchId = new Map<string,string>();
+        let hasEala = false;
+        for (const event of events) {
+          const code = text(event.EventTypeCode).toUpperCase();
+          if (code !== "LS" && code !== "LD" && !/Women's Singles|Women's Doubles/i.test(text(event.DrawTypeTitle))) continue;
+          const eventMatches = drawEventMatches(event);
+          if (eventMatches.some(item => drawMatchContainsEala(item.match))) hasEala = true;
+          for (const item of eventMatches) {
+            const id = text(item.match.Id);
+            if (id) roundByMatchId.set(id, roundNameFromDrawId(item.roundId) || "TBA");
+          }
+        }
+        if (!hasEala) continue;
+        const matchesPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
+        const feedMatches = records(matchesPayload,"matches");
+        for (const m of feedMatches) {
+          const state = text(m.MatchState).toUpperCase();
+          if (!["F","C","FINISHED","COMPLETED"].includes(state)) continue;
+          const aIds = [text(m.PlayerIDA),text(m.PlayerIDA2)].filter(Boolean);
+          const bIds = [text(m.PlayerIDB),text(m.PlayerIDB2)].filter(Boolean);
+          const ealaOnA = aIds.includes(String(EALA_ID));
+          const ealaOnB = bIds.includes(String(EALA_ID));
+          if (!ealaOnA && !ealaOnB) continue;
+          const doublesMatch = text(m.DrawMatchType).toUpperCase() === "D" || text(m.MatchID).startsWith("LD");
+          const category = doublesMatch ? "doubles" : "singles";
+          const setScores: Array<[number,number]> = [];
+          for (let i=1;i<=5;i++) {
+            const a=num(m["ScoreSet"+i+"A"]), b=num(m["ScoreSet"+i+"B"]);
+            if (a !== null && b !== null && (a !== 0 || b !== 0)) setScores.push([a,b]);
+          }
+          const winsA = setScores.filter(s=>s[0]>s[1]).length;
+          const winsB = setScores.filter(s=>s[1]>s[0]).length;
+          if (winsA === winsB || setScores.length === 0) continue;
+          const ealaWon = ealaOnA ? winsA>winsB : winsB>winsA;
+          const ealaSide = ealaOnA ? aIds : bIds;
+          const opponentSide = ealaOnA ? bIds : aIds;
+          const ealaPartnerId = doublesMatch ? (ealaSide.find(id=>id!==String(EALA_ID)) ?? "") : "";
+          const opponentIds = doublesMatch ? opponentSide.slice(0,2) : [opponentSide.find(id=>id!==String(EALA_ID)) ?? ""];
+          const sideAName = [text(m.PlayerNameFirstA),text(m.PlayerNameLastA)].filter(Boolean).join(" ").trim();
+          const sideBName = [text(m.PlayerNameFirstB),text(m.PlayerNameLastB)].filter(Boolean).join(" ").trim();
+          const sideA2Name = [text(m.PlayerNameFirstA2),text(m.PlayerNameLastA2)].filter(Boolean).join(" ").trim();
+          const sideB2Name = [text(m.PlayerNameFirstB2),text(m.PlayerNameLastB2)].filter(Boolean).join(" ").trim();
+          const opponentName = doublesMatch
+            ? (ealaOnA ? [sideBName,sideB2Name] : [sideAName,sideA2Name]).filter(Boolean).join(" / ")
+            : (ealaOnA ? sideBName : sideAName);
+          const ealaPartnerName = doublesMatch ? (ealaOnA ? sideA2Name : sideB2Name) : "";
+          const matchDateTime = text(m.MatchTimeStamp);
+          if (!matchDateTime || !Number.isFinite(Date.parse(matchDateTime))) continue;
+          const normalized: Row = {
+            player_1:String(EALA_ID),
+            player_2:opponentIds[0] ?? "",
+            player_3:doublesMatch ? ealaPartnerId : "",
+            player_4:doublesMatch ? (opponentIds[1] ?? "") : "",
+            winner:ealaWon ? 1 : 2,
+            scores:text(m.ScoreString).replace(/,/g," ").replace(/\s+/g," ").trim(),
+            round_name:roundByMatchId.get(text(m.MatchID)) || "TBA",
+            TournamentName:t.title || "WTA tournament",
+            tourn_year:String(t.year),
+            TournamentType:t.level,
+            Surface:t.surface,
+            city:t.city,
+            MatchTimeStamp:matchDateTime,
+            matchDate:matchDateTime,
+            status:"completed",
+            opponent:{fullName:opponentName || "Opponent"},
+            tournament:{
+              id:t.groupId, year:t.year, title:t.title, name:t.title,
+              startDate:t.start, endDate:t.end, surface:t.surface, level:t.level,
+              tournamentGroup:{id:t.groupId,name:t.title,level:t.level}
+            }
+          };
+          normalized.id = stableEventId(normalized,category);
+          if (doublesMatch) {
+            normalized.team_name_1 = ["Alexandra Eala",ealaPartnerName].filter(Boolean).join(" / ");
+            normalized.team_name_2 = opponentName;
+            doubles.push(normalized);
+          } else {
+            singles.push(normalized);
+          }
+        }
+      } catch (error) {
+        console.error("Recent WTA tournament reconciliation failed:",t.groupId,t.year,error);
+      }
+    }
+    const s = singles.length ? await upsertMatches(singles,"singles",new Map()) : 0;
+    const d = doubles.length ? await upsertMatches(doubles,"doubles",new Map()) : 0;
+    return {singles:s,doubles:d};
+  } catch (error) {
+    console.error("Recent WTA tournament reconciliation unavailable:",error);
+    return {singles:0,doubles:0};
+  }
+}
+
 async function authorized(req: Request) {
   const header = req.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -1082,6 +1218,7 @@ async function sync(force=false){
     const year=new Date().getUTCFullYear();
     const exactStarts=await resolveExactMatchStarts(singles.filter(m=>completed(m)&&seasonYear(m)===year&&!exactMatchStart(m)));
     const sc=await upsertMatches(singles,"singles",exactStarts),dc=await upsertMatches(doubles,"doubles",new Map());
+    const drawResults=await syncRecentWtaTournamentResults();
     let rc=0;
     for(const [item,kind] of [[sRank,"singles"],[dRank,"doubles"]] as const){
       const ranking=item.ranking;
@@ -1216,9 +1353,14 @@ async function sync(force=false){
       );
     }
 
+    if(!selectedNextMatch){
+      // Never leave a completed fixture as the "next match". Keep event-only
+      // tournament placeholders, but expire any specific match whose start passed.
+      await q("delete from public.eala_next_match where player_id=$1 and ((coalesce(match_start,match_date::timestamptz) is not null and coalesce(match_start,match_date::timestamptz)<now()-interval '6 hours') or (coalesce(match_start,match_date::timestamptz) is null and tournament_end is not null and tournament_end<now()-interval '6 hours'))",[EALA_ID]);
+    }
     const nextMatchExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
     await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
-    return {ok:true,singles:sc,doubles:dc,rankings:rc,nextMatch:nextMatchExists};
+    return {ok:true,singles:sc+drawResults.singles,doubles:dc+drawResults.doubles,drawResults,nextMatch:nextMatchExists};
   }catch(e){
     if(runId!==null)await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);
     throw e;
