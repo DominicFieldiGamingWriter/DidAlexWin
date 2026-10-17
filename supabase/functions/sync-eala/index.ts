@@ -1358,7 +1358,7 @@ async function sync(force=false){
       // tournament placeholders, but expire any specific match whose start passed.
       await q("delete from public.eala_next_match where player_id=$1 and ((coalesce(match_start,match_date::timestamptz) is not null and coalesce(match_start,match_date::timestamptz)<now()-interval '6 hours') or (coalesce(match_start,match_date::timestamptz) is null and tournament_end is not null and tournament_end<now()-interval '6 hours'))",[EALA_ID]);
     }
-    const nextMatchExists=Boolean(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID]));
+    const nextMatchExists=(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID])).length>0;
     await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
     return {ok:true,singles:sc+drawResults.singles,doubles:dc+drawResults.doubles,drawResults,nextMatch:nextMatchExists};
   }catch(e){
@@ -1556,6 +1556,15 @@ async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>
                 !!line && typeof line === "object" && playerIdsMatch((line as Row).Players)
               );
               if (hasEala) {
+                const hasUnplayedSinglesMatch = drawEventMatches(drawEvent).some(item =>
+                  drawMatchContainsEala(item.match) &&
+                  num(item.match.finished) !== 1 &&
+                  text(item.match.mState).toUpperCase() !== "F"
+                );
+                const tournamentAlreadyStarted = Number.isFinite(Date.parse(t.start)) && Date.parse(t.start) <= Date.now();
+                // A tournament Eala has already exited from must not block
+                // discovery of her next entered tournament.
+                if (tournamentAlreadyStarted && !hasUnplayedSinglesMatch) continue;
                 placeholder = t as Row;
                 placeholderDrawPayload = drawPayload;
                 break;
@@ -1566,6 +1575,8 @@ async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>
             const payload = await getJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/players");
             const players = records(payload,"players").length ? records(payload,"players") : records(payload);
             if (players.some(playerIdsMatch)) {
+              const tournamentAlreadyStarted = Number.isFinite(Date.parse(t.start)) && Date.parse(t.start) <= Date.now();
+              if (tournamentAlreadyStarted) continue;
               placeholder = t as Row;
               break;
             }
