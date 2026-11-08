@@ -66,7 +66,8 @@ function isCurrentNextMatch(match: NextMatch, now = Date.now()) {
   // tournament window for relevance.
   const exact = match.match_start || match.match_date;
   if (exact) {
-    const at = Date.parse(exact);
+    const isDateOnly = !match.match_start && /^\d{4}-\d{2}-\d{2}$/.test(exact);
+    const at = Date.parse(isDateOnly ? exact + "T23:59:59.999Z" : exact);
     return Number.isFinite(at) && at >= now - 6 * 60 * 60 * 1000;
   }
   const end = match.tournament_end ? Date.parse(match.tournament_end) : NaN;

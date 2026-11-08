@@ -31,6 +31,12 @@ function dateOnly(value: unknown) {
   if(!s || Number.isNaN(Date.parse(s)))return "";
   return new Date(s).toISOString().slice(0,10);
 }
+function inclusiveDateEnd(value: unknown) {
+  const s=text(value);
+  if(!s)return Number.NaN;
+  const inclusive=/^\d{4}-\d{2}-\d{2}$/.test(s) ? s+"T23:59:59.999Z" : s;
+  return Date.parse(inclusive);
+}
 function exactMatchStart(m: Row) {
   for(const v of [m.MatchTimeStamp,m.matchTimeStamp,m.scheduledTime,m.scheduled_time]){
     const s=text(v);
@@ -131,7 +137,7 @@ function candidateIsRelevant(candidate: NextMatchCandidate,now=Date.now()): bool
   // placeholders where no opponent or match time has been confirmed.
   const specificTime = candidate.matchStart || candidate.matchDate;
   if (specificTime) {
-    const at = Date.parse(specificTime);
+    const at = candidate.matchStart ? Date.parse(candidate.matchStart) : inclusiveDateEnd(specificTime);
     return Number.isFinite(at) && at >= now - 6 * 60 * 60 * 1000;
   }
   const eventEnd = candidate.tournamentEnd ? Date.parse(candidate.tournamentEnd)
@@ -861,6 +867,110 @@ async function upsertMatches(list:Row[],category:string,exactStarts:Map<string,s
   return rows.length;
 }
 
+function wtaMatchRoundName(match: Row, roundByMatchId: Map<string,string> = new Map()) {
+  const matchId = text(match.MatchID);
+  const mapped = roundByMatchId.get(matchId);
+  if (mapped) return mapped;
+
+  const values = [
+    match.RoundName,
+    match.roundName,
+    match.MatchRoundName,
+    match.matchRoundName,
+    match.TournamentRoundName,
+    match.tournamentRoundName,
+    match.RoundDesc,
+    match.roundDesc,
+    match.Round,
+    match.round
+  ];
+  for (const raw of values) {
+    const value = text(raw).trim().toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+    if (!value) continue;
+    if (/\b(QUARTER ?FINAL|QF)\b/.test(value)) return "Q";
+    if (/\b(SEMI ?FINAL|SF)\b/.test(value)) return "S";
+    if (/\bFINAL\b/.test(value) || value === "F") return "F";
+    if (/\bROUND OF 16\b/.test(value) || value === "R16") return "R16";
+    if (/\bROUND OF 32\b/.test(value) || value === "R32") return "R32";
+    if (/\bROUND OF 64\b/.test(value) || value === "R64") return "R64";
+    if (/\bROUND OF 128\b/.test(value) || value === "R128") return "R128";
+  }
+
+  const roundId = num(match.TournamentRoundID) ?? num(match.RoundID) ?? num(match.roundId);
+  const drawSize = num(match.SinglesDrawSize) ?? num(match.DrawSize);
+  if (roundId !== null && drawSize !== null) {
+    return roundNameFromTournamentRoundId(roundId, drawSize) || "TBA";
+  }
+  return "TBA";
+}
+
+async function discoverWtaMatchFeedCandidate(tournament: Row): Promise<NextMatchCandidate|null> {
+  const groupId = num(tournament.groupId);
+  const year = num(tournament.year);
+  if (groupId === null || year === null) return null;
+
+  const payload = await dbHttpGetJson(WTA+"/tournaments/"+groupId+"/"+year+"/matches");
+  const matches = records(payload, "matches");
+  const now = Date.now();
+
+  const candidates = matches.map(match => {
+    const matchId = text(match.MatchID);
+    const aIds = [match.PlayerIDA, match.PlayerIDA2].map(stringValue).filter(id => id && id !== "0");
+    const bIds = [match.PlayerIDB, match.PlayerIDB2].map(stringValue).filter(id => id && id !== "0");
+    const ealaOnA = aIds.includes(String(EALA_ID));
+    const ealaOnB = bIds.includes(String(EALA_ID));
+    if (!ealaOnA && !ealaOnB) return null;
+
+    const drawType = text(match.DrawMatchType).toUpperCase();
+    const isDoubles = drawType === "D" || drawType === "DOUBLES" ||
+      matchId.toUpperCase().startsWith("LD") || aIds.length > 1 || bIds.length > 1;
+    if (isDoubles) return null;
+
+    const state = text(match.MatchState ?? match.status).trim().toUpperCase();
+    if (["F", "C", "FINISHED", "COMPLETED", "CANCELLED", "CANCELED", "W/O", "WO"].includes(state)) return null;
+
+    const timeValue = [
+      match.MatchTimeStamp,
+      match.matchTimeStamp,
+      match.MatchStartTime,
+      match.ScheduledTime,
+      match.MatchDateTime,
+      match.DateTimeRaw
+    ].map(text).find(value => value && !Number.isNaN(Date.parse(value))) ?? "";
+    const matchStart = timeValue && /T\d{2}:\d{2}/.test(timeValue) ? timeValue : null;
+    const matchDate = dateOnly(timeValue || match.MatchDate || match.matchDate || match.Date || match.date) || null;
+    if (matchDate && inclusiveDateEnd(matchDate) < now - 6 * 60 * 60 * 1000) return null;
+
+    const opponentFirst = text(ealaOnA ? match.PlayerNameFirstB : match.PlayerNameFirstA);
+    const opponentLast = text(ealaOnA ? match.PlayerNameLastB : match.PlayerNameLastA);
+    const opponentName = [opponentFirst, opponentLast].filter(Boolean).join(" ").trim() ||
+      text(ealaOnA ? match.PlayerNameB : match.PlayerNameA) || "TBA";
+
+    return {
+      source: "wta:match_feed",
+      tournament: text(tournament.title) || "WTA tournament",
+      roundName: wtaMatchRoundName(match),
+      opponent: opponentName,
+      matchDate,
+      matchStart,
+      confidence: opponentName !== "TBA" ? "match" : "event",
+      tournamentStart: text(tournament.start) || null,
+      tournamentEnd: text(tournament.end) || null,
+      surface: text(tournament.surface) || null,
+      venue: text(tournament.city) || null,
+      sourceEventId: num(match.MatchID) ?? num(match.id) ?? null,
+      rawJson: {
+        source: "WTA tournament match feed",
+        feed_match_id: matchId || null,
+        match_state: state || null,
+        match: match
+      }
+    } as NextMatchCandidate;
+  }).filter((candidate): candidate is NextMatchCandidate => candidate !== null);
+
+  return candidates.sort((a,b) => candidateStart(a)-candidateStart(b))[0] ?? null;
+}
+
 async function syncRecentWtaTournamentResults(): Promise<{singles:number,doubles:number}> {
   // The player match-history endpoint can lag behind live tournament results.
   // Reconcile finished matches from official WTA tournament match feeds for
@@ -907,9 +1017,12 @@ async function syncRecentWtaTournamentResults(): Promise<{singles:number,doubles
             if (id) roundByMatchId.set(id, roundNameFromDrawId(item.roundId) || "TBA");
           }
         }
-        if (!hasEala) continue;
         const matchesPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/matches");
         const feedMatches = records(matchesPayload,"matches");
+        const hasEalaInMatchFeed = feedMatches.some(m =>
+          [m.PlayerIDA,m.PlayerIDB,m.PlayerIDA2,m.PlayerIDB2].some(id => stringValue(id) === String(EALA_ID))
+        );
+        if (!hasEala && !hasEalaInMatchFeed) continue;
         for (const m of feedMatches) {
           const state = text(m.MatchState).toUpperCase();
           if (!["F","C","FINISHED","COMPLETED"].includes(state)) continue;
@@ -950,7 +1063,7 @@ async function syncRecentWtaTournamentResults(): Promise<{singles:number,doubles
             player_4:doublesMatch ? (opponentIds[1] ?? "") : "",
             winner:ealaWon ? 1 : 2,
             scores:text(m.ScoreString).replace(/,/g," ").replace(/\s+/g," ").trim(),
-            round_name:roundByMatchId.get(text(m.MatchID)) || "TBA",
+            round_name:roundByMatchId.get(text(m.MatchID)) || wtaMatchRoundName(m,roundByMatchId),
             TournamentName:t.title || "WTA tournament",
             tourn_year:String(t.year),
             TournamentType:t.level,
@@ -1107,7 +1220,7 @@ async function syncSchedule() {
       [EALA_ID]
     ),
     q(
-      "select coalesce(match_start, match_date::timestamptz) as latest_at from public.eala_matches where player_id=$1 and category='singles' and eala_won is not null order by coalesce(match_start, match_date::timestamptz) desc nulls last limit 1",
+      "select coalesce(match_start, match_date::timestamptz) as latest_at, raw_json->'tournament'->>'startDate' as tournament_start, raw_json->'tournament'->>'endDate' as tournament_end from public.eala_matches where player_id=$1 and category='singles' and eala_won is not null order by coalesce(match_start, match_date::timestamptz) desc nulls last limit 1",
       [EALA_ID]
     ),
     q(
@@ -1126,8 +1239,19 @@ async function syncSchedule() {
 
   const nextStart = next?.match_start ? Date.parse(String(next.match_start)) : NaN;
   const tournamentStart = next?.tournament_start ? Date.parse(String(next.tournament_start)) : NaN;
-  const tournamentEnd = next?.tournament_end ? Date.parse(String(next.tournament_end)) : NaN;
+  const tournamentEnd = next?.tournament_end ? inclusiveDateEnd(String(next.tournament_end)) : NaN;
   const latestAt = latest?.latest_at ? Date.parse(String(latest.latest_at)) : NaN;
+  const latestTournamentStart = latest?.tournament_start ? Date.parse(String(latest.tournament_start)) : NaN;
+  const latestTournamentEnd = latest?.tournament_end ? inclusiveDateEnd(String(latest.tournament_end)) : NaN;
+  const latestTournamentActive =
+    Number.isFinite(latestTournamentStart) &&
+    Number.isFinite(latestTournamentEnd) &&
+    latestTournamentStart <= now &&
+    latestTournamentEnd >= now;
+  const latestTournamentRecentlyEnded =
+    Number.isFinite(latestTournamentEnd) &&
+    latestTournamentEnd < now &&
+    latestTournamentEnd >= now - 12 * 60 * 60 * 1000;
 
   const imminentMatch =
     Number.isFinite(nextStart) &&
@@ -1143,10 +1267,11 @@ async function syncSchedule() {
   const recentAsianMatch = Number.isFinite(recentAsianAt) && recentAsianAt >= now - 72 * 60 * 60 * 1000;
 
   const tournamentActive =
-    Number.isFinite(tournamentStart) &&
-    Number.isFinite(tournamentEnd) &&
-    tournamentStart <= now &&
-    tournamentEnd >= now - 6 * 60 * 60 * 1000;
+    (Number.isFinite(tournamentStart) &&
+      Number.isFinite(tournamentEnd) &&
+      tournamentStart <= now &&
+      tournamentEnd >= now - 6 * 60 * 60 * 1000) ||
+    latestTournamentActive;
 
   const tournamentImminent =
     Number.isFinite(tournamentStart) &&
@@ -1154,17 +1279,18 @@ async function syncSchedule() {
     tournamentStart <= now + 24 * 60 * 60 * 1000;
 
   const tournamentRecentlyEnded =
-    Number.isFinite(tournamentEnd) &&
-    tournamentEnd < now &&
-    tournamentEnd >= now - 12 * 60 * 60 * 1000;
+    (Number.isFinite(tournamentEnd) &&
+      tournamentEnd < now &&
+      tournamentEnd >= now - 12 * 60 * 60 * 1000) ||
+    latestTournamentRecentlyEnded;
 
   let interval = SYNC_INTERVAL_12_HOURS;
   let mode = "idle";
 
   const asianGamesActive = tournamentActive && String(next?.tournament ?? "").toLowerCase().includes("asian games");
-  if(imminentMatch||recentMatch||asianGamesActive||recentAsianMatch){
+  if(imminentMatch||recentMatch||asianGamesActive||recentAsianMatch||latestTournamentActive){
     interval=SYNC_INTERVAL_15_MINUTES;
-    mode=asianGamesActive ? "asian_games_match_window" : "match_window";
+    mode=asianGamesActive ? "asian_games_match_window" : latestTournamentActive ? "wta_tournament_window" : "match_window";
   }else if(tournamentActive||tournamentImminent||tournamentRecentlyEnded){
     interval=SYNC_INTERVAL_1_HOUR;
     mode=tournamentActive?"tournament":tournamentImminent?"upcoming_event":"recent_event";
@@ -1551,7 +1677,7 @@ async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>
           .filter(item => {
             const now = Date.now();
             const starts = Date.parse(item.start);
-            const ends = Date.parse(item.end);
+            const ends = inclusiveDateEnd(item.end);
             if (item.groupId === null || item.year === null || !Number.isFinite(starts) || !Number.isFinite(ends)) return false;
             // Include tournaments that are already in progress as well as
             // tournaments starting in the next 60 days. The previous 36-hour
@@ -1561,8 +1687,8 @@ async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>
           })
           .sort((a,b) => {
             const now = Date.now();
-            const aActive = Date.parse(a.start) <= now && Date.parse(a.end) >= now;
-            const bActive = Date.parse(b.start) <= now && Date.parse(b.end) >= now;
+            const aActive = Date.parse(a.start) <= now && inclusiveDateEnd(a.end) >= now;
+            const bActive = Date.parse(b.start) <= now && inclusiveDateEnd(b.end) >= now;
             if (aActive !== bActive) return aActive ? -1 : 1;
             return Date.parse(a.start)-Date.parse(b.start);
           });
@@ -1571,6 +1697,12 @@ async function discoverWtaTournamentCandidate():Promise<NextMatchCandidate|null>
         let placeholderDrawPayload: unknown = null;
         for (const t of upcomingTournaments.slice(0, 8)) {
           if (t.groupId === null || t.year === null) continue;
+          try {
+            const feedCandidate = await discoverWtaMatchFeedCandidate(t as Row);
+            if (feedCandidate) return feedCandidate;
+          } catch (error) {
+            console.error("WTA upcoming match-feed lookup failed:",t.groupId,t.year,error);
+          }
           try {
             const drawPayload = await dbHttpGetJson(WTA+"/tournaments/"+t.groupId+"/"+t.year+"/draw");
             const drawEvent = drawEvents(drawPayload).find(event =>
