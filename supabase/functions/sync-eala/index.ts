@@ -591,6 +591,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
       ? asianText(window.nextSlot.VenueDesc)||
         (window.nextSlot.Venue&&typeof window.nextSlot.Venue==="object"?asianText((window.nextSlot.Venue as Row).Desc):"")
       : "";
+    let latestCompleted:Row|null=null;
 
     try{
       const bracketPayload=await getBornanJson(ASIAN_GAMES_BASE+"/brackets/"+ASIAN_GAMES_EVENT);
@@ -647,7 +648,7 @@ async function syncAsianGamesCandidate():Promise<NextMatchCandidate|null>{
           const at=asianMatchTimestamp(a),bt=asianMatchTimestamp(b);
           return (bt?Date.parse(bt):0)-(at?Date.parse(at):0);
         });
-      let latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
+      latestCompleted=completedEalaMatches[0]||completedScheduleMatches[0]||null;
 
       // Query Bornan's result endpoint for the previous match immediately.
       // Do not depend on the bracket status changing to "completed".
@@ -881,6 +882,8 @@ function wtaMatchRoundName(match: Row, roundByMatchId: Map<string,string> = new 
     match.tournamentRoundName,
     match.RoundDesc,
     match.roundDesc,
+    match.RoundID,
+    match.roundID,
     match.Round,
     match.round
   ];
