@@ -1153,8 +1153,9 @@ async function refreshCanonicalMatches() {
           else
             'wta|'||
             coalesce(nullif(m.raw_json->>'tourn_year',''),coalesce(m.season_id::text,''))||'|'||
-            coalesce(m.round_name,'')||'|'||
+            coalesce(m.tournament_id::text,nullif(m.raw_json->'tournament'->>'id',''),'')||'|'||
             coalesce(coalesce(m.match_start,m.match_date::timestamptz)::date::text,'')||'|'||
+            m.category||'|'||
             md5(array_to_string(
               ARRAY(
                 SELECT player_id
@@ -1206,6 +1207,7 @@ async function refreshCanonicalMatches() {
     ) x
     order by x.canonical_key,
              (x.eala_won is not null) desc,
+             (nullif(x.round_name,'') is not null and upper(x.round_name)<>'TBA') desc,
              (x.scheduled_at is not null) desc,
              x.source_match_id desc
   `,[EALA_ID]);
