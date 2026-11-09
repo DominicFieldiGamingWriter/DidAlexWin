@@ -24,6 +24,21 @@ type Match = {
   raw_json: Record<string, unknown> | null;
 };
 
+async function fetchLastStatsUpdate(): Promise<string | null> {
+  const params = new URLSearchParams({
+    player_id: "eq." + EALA_ID,
+    select: "updated_at",
+    limit: "1"
+  });
+  const response = await fetch(SUPABASE_URL + "/rest/v1/eala_stats?" + params.toString(), {
+    headers: { apikey: SUPABASE_KEY },
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error("Supabase stats heartbeat returned HTTP " + response.status);
+  const rows = await response.json() as Array<{ updated_at?: string | null }>;
+  return rows[0]?.updated_at ?? null;
+}
+
 async function fetchMatches(): Promise<Match[]> {
   const params = new URLSearchParams({
     player_id: "eq." + EALA_ID,
@@ -61,7 +76,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const matches = await fetchMatches();
+    const [matches, lastSyncedAt] = await Promise.all([
+      fetchMatches(),
+      fetchLastStatsUpdate()
+    ]);
     const completedSingles = matches
       .filter(match => match.category === "singles" && match.state === "completed" && match.eala_won !== null)
       .sort((a, b) => Date.parse(b.played_at ?? b.scheduled_at ?? "") - Date.parse(a.played_at ?? a.scheduled_at ?? ""));
@@ -73,7 +91,7 @@ export async function GET() {
         return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER) -
           (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
       });
-    const lastSyncedAt = matches.reduce<string | null>((latest, match) =>
+    const canonicalDataUpdatedAt = matches.reduce<string | null>((latest, match) =>
       !latest || match.updated_at > latest ? match.updated_at : latest, null);
     const nextFixture = pending.find(match => match.raw_json?.canonical_role === "next_fixture") ?? null;
     const eventCandidate = pending[0] ?? null;
@@ -89,6 +107,8 @@ export async function GET() {
       sport: "tennis",
       player: "Alexandra Eala",
       lastSyncedAt,
+      syncTimestampSource: "eala_stats.updated_at",
+      canonicalDataUpdatedAt,
       dataAgeMinutes,
       matchCount: matches.length,
       completedSinglesCount: completedSingles.length,
