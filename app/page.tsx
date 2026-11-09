@@ -332,7 +332,7 @@ export default async function Home() {
         <div className="upcoming-card">
           <div className="upcoming-main">
             <div className="upcoming-title">
-              {data.nextMatch ? displayPersonName(data.nextMatch.opponent) : "Waiting for scheduled fixture"}
+              {data.nextMatch ? displayPersonName(data.nextMatch.opponent) : "Waiting for next competitive scheduled fixture"}
             </div>
             <div className="upcoming-event">
               {data.nextMatch ? formatTournament(data.nextMatch.tournament) : "Next tournament information unavailable"}
