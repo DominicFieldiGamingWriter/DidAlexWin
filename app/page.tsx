@@ -401,7 +401,7 @@ export default async function Home() {
           <div className="recent-form-heading">
             <div>
               <span className="section-label">RECENT FORM</span>
-              <strong>Last 5 singles matches</strong>
+              <strong>Last 5 competitive singles matches</strong>
             </div>
             <span className="recent-form-key">W = win · L = loss</span>
           </div>
