@@ -1153,8 +1153,18 @@ async function refreshCanonicalMatches() {
           else
             'wta|'||
             coalesce(nullif(m.raw_json->>'tourn_year',''),coalesce(m.season_id::text,''))||'|'||
-            coalesce(m.tournament_id::text,nullif(m.raw_json->'tournament'->>'id',''),'')||'|'||
-            coalesce(coalesce(m.match_start,m.match_date::timestamptz)::date::text,'')||'|'||
+            case
+              -- When the match date is known, tournament IDs are optional
+              -- metadata: WTA feed copies with/without an ID are the same match.
+              when coalesce(m.match_start,m.match_date::timestamptz) is not null
+                then coalesce(coalesce(m.match_start,m.match_date::timestamptz)::date::text,'')
+              -- Undated historical records need tournament/round identity;
+              -- otherwise unrelated matches in the same season can collapse.
+              else 'undated|'||
+                coalesce(m.tournament_id::text,
+                  nullif(lower(regexp_replace(coalesce(m.tournament_name,''),'[^a-zA-Z0-9]+',' ','g')),''),
+                  '')||'|'||coalesce(m.round_name,'')
+            end||'|'||
             m.category||'|'||
             md5(array_to_string(
               ARRAY(
@@ -1207,6 +1217,8 @@ async function refreshCanonicalMatches() {
     ) x
     order by x.canonical_key,
              (x.eala_won is not null) desc,
+             (x.tournament_id is not null) desc,
+             length(coalesce(x.tournament_name,'')) desc,
              (nullif(x.round_name,'') is not null and upper(x.round_name)<>'TBA') desc,
              (x.scheduled_at is not null) desc,
              x.source_match_id desc
