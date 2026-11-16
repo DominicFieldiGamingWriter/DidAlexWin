@@ -286,6 +286,12 @@ export default async function Home() {
         </div>
       </div>
 
+      <section className="season-update" aria-label="Season update">
+        <span className="season-update-label">SEASON UPDATE</span>
+        <p>Alex&apos;s 2026 competitive season ended with the Hong Kong Open final on 8 November, where she lost to Claire Liu.</p>
+        <p>Her next match is an exhibition against <strong>Janice Tjen</strong> in Bulacan (8 December) before the new tennis season begins in January.</p>
+      </section>
+
       <section className="result-section">
         <div className="result-card">
           <div className="match-main">

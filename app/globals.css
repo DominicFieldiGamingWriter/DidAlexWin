@@ -1546,3 +1546,51 @@ footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* Fixed season update notice beneath the homepage heading. */
+.season-update {
+  width: 100%;
+  margin-top: 20px;
+  padding: 17px 22px;
+  display: grid;
+  gap: 7px;
+  background: #ffffff;
+  border: 1px solid #dfe4ea;
+  border-left: 4px solid #0039a6;
+  border-radius: 16px;
+  box-shadow: 0 5px 18px rgba(17, 26, 41, 0.045);
+}
+
+.season-update-label {
+  color: #ce1126;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+}
+
+.season-update p {
+  margin: 0;
+  color: #27354a;
+  font-size: clamp(14px, 1.45vw, 16px);
+  line-height: 1.55;
+}
+
+.season-update strong {
+  color: #0039a6;
+  font-weight: 900;
+}
+
+@media (max-width: 600px) {
+  .season-update {
+    margin-top: 16px;
+    padding: 15px 16px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+
+  .season-update p {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+}
