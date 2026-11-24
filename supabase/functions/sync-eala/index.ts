@@ -1327,7 +1327,59 @@ async function syncSchedule() {
   };
 }
 
+
+async function dashboardFingerprint() {
+  const [matches, rankings] = await Promise.all([
+    q("select canonical_key,category,state,tournament_name,tournament_level,season_year,round_name,scheduled_at,played_at,opponent_name,eala_won,score,surface,venue,raw_json from public.eala_canonical_matches where player_id=$1 order by canonical_key",[EALA_ID]),
+    q("select ranking_type,ranking,ranking_date from public.eala_rankings where player_id=$1 order by ranking_type,ranking_date desc",[EALA_ID])
+  ]);
+  const payload = JSON.stringify({ matches, rankings });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function retryPendingRevalidations() {
+  try {
+    const pending = await q("select id from public.eala_sync_runs where revalidation_pending=true order by started_at asc limit 5");
+    if (!pending.length) return { pending: 0, delivered: 0, failed: 0 };
+    const secretRows = await q("select decrypted_secret from vault.decrypted_secrets where name=$1 limit 1",["didalexwin_revalidate_secret"]);
+    const secret = text(secretRows[0]?.decrypted_secret);
+    if (!secret) {
+      console.error("Homepage cache revalidation is pending but its Vault secret is unavailable.");
+      return { pending: pending.length, delivered: 0, failed: pending.length };
+    }
+    let delivered = 0, failed = 0;
+    for (const row of pending) {
+      let lastError = "", attemptsUsed = 0, sent = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        attemptsUsed++;
+        try {
+          const response = await fetch("https://didalexwin.com/api/revalidate", {
+            method: "POST", headers: { Authorization: "Bearer " + secret, Accept: "application/json" }, body: "{}", signal: AbortSignal.timeout(10000)
+          });
+          if (!response.ok) throw new Error("Revalidation endpoint returned " + response.status + ": " + (await response.text()).slice(0, 300));
+          await q("update public.eala_sync_runs set revalidation_pending=false,revalidation_attempts=revalidation_attempts+$1,revalidation_last_error=null where id=$2",[attemptsUsed,row.id]);
+          delivered++; sent = true; break;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+          console.error("Homepage cache revalidation attempt " + attempt + " failed for sync run " + row.id + ":", lastError);
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      }
+      if (!sent) {
+        await q("update public.eala_sync_runs set revalidation_attempts=revalidation_attempts+$1,revalidation_last_error=$2 where id=$3",[attemptsUsed,lastError.slice(0,2000),row.id]);
+        failed++;
+      }
+    }
+    return { pending: pending.length, delivered, failed };
+  } catch (error) {
+    console.error("Failed to process pending homepage cache invalidations:", error);
+    return { pending: 0, delivered: 0, failed: 1 };
+  }
+}
+
 async function sync(force=false){
+  const previousRevalidationRetries = await retryPendingRevalidations();
   const schedule = await syncSchedule();
   if(force) schedule.due=true;
   if (!schedule.due) {
@@ -1337,7 +1389,8 @@ async function sync(force=false){
       reason: "not_due",
       mode: schedule.mode,
       intervalMinutes: schedule.intervalMinutes,
-      lastSync: schedule.lastSync
+      lastSync: schedule.lastSync,
+      cacheInvalidationRetries: previousRevalidationRetries
     };
   }
 
@@ -1347,6 +1400,7 @@ async function sync(force=false){
   try{
     const run=await q("insert into public.eala_sync_runs(started_at) values(now()) returning id");
     runId=Number(run[0].id);
+    const beforeDashboardFingerprint = await dashboardFingerprint();
     const [profile,singles,doubles]=await Promise.all([
       getJson(WTA+"/players/"+EALA_ID),
       getPlayerMatches("S"),
@@ -1528,8 +1582,11 @@ async function sync(force=false){
       );
     }
 const nextMatchExists=(await q("select 1 from public.eala_next_match where player_id=$1 limit 1",[EALA_ID])).length>0;
-    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4 where id=$5",[sc,dc,rc,nextMatchExists,runId]);
-    return {ok:true,singles:sc+drawResults.singles,doubles:dc+drawResults.doubles,drawResults,nextMatch:nextMatchExists};
+    const afterDashboardFingerprint = await dashboardFingerprint();
+    const dashboardChanged = beforeDashboardFingerprint !== afterDashboardFingerprint;
+    await q("update public.eala_sync_runs set finished_at=now(),success=true,matches_singles=$1,matches_doubles=$2,rankings_updated=$3,next_match_found=$4,revalidation_pending=$5 where id=$6",[sc,dc,rc,nextMatchExists,dashboardChanged,runId]);
+    const cacheInvalidation = dashboardChanged ? await retryPendingRevalidations() : { pending: 0, delivered: 0, failed: 0 };
+    return {ok:true,singles:sc+drawResults.singles,doubles:dc+drawResults.doubles,drawResults,nextMatch:nextMatchExists,dashboardChanged,cacheInvalidation};
   }catch(e){
     if(runId!==null)await q("update public.eala_sync_runs set finished_at=now(),success=false,error_message=$1 where id=$2",[e instanceof Error?e.message:String(e),runId]);
     throw e;

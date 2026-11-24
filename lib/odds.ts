@@ -67,7 +67,9 @@ type OddsResponse = {
 
 const API_BASE = "https://api.the-odds-api.com/v4";
 const DEFAULT_REGIONS = "uk,eu,au";
-const CACHE_SECONDS = 2 * 60 * 60;
+const SPORTS_CACHE_SECONDS = 24 * 60 * 60;
+const EVENTS_CACHE_SECONDS = 30 * 60;
+const ODDS_CACHE_SECONDS = 15 * 60;
 
 function normaliseName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -88,7 +90,7 @@ function matchesOpponent(value: string, opponent: string) {
 }
 
 async function resolveSportKey(tournament: string, apiKey: string): Promise<string | null> {
-  const sports = await getJson<OddsSport[]>(API_BASE + "/sports?apiKey=" + encodeURIComponent(apiKey));
+  const sports = await getJson<OddsSport[]>(API_BASE + "/sports?apiKey=" + encodeURIComponent(apiKey), SPORTS_CACHE_SECONDS);
   if (!sports?.length) return null;
   const tokens = tournament.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean)
     .filter(token => !["open","championship","championships","presented","by","singles","women","womens"].includes(token));
@@ -106,9 +108,9 @@ async function resolveSportKey(tournament: string, apiKey: string): Promise<stri
   return best&&best.score>0?best.sport.key:null;
 }
 
-async function getJson<T>(url: string): Promise<T | null> {
+async function getJson<T>(url: string, revalidateSeconds: number): Promise<T | null> {
   try {
-    const response = await fetch(url, { next: { revalidate: CACHE_SECONDS } });
+    const response = await fetch(url, { next: { revalidate: revalidateSeconds } });
     if (!response.ok) return null;
     return (await response.json()) as T;
   } catch {
@@ -128,7 +130,8 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
     dateFormat: "iso",
   });
   const events = await getJson<OddsEvent[]>(
-    API_BASE + "/sports/" + tournamentKey + "/events?" + params.toString()
+    API_BASE + "/sports/" + tournamentKey + "/events?" + params.toString(),
+    EVENTS_CACHE_SECONDS
   );
   if (!events?.length) return null;
 
@@ -139,8 +142,8 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
     )
     .sort(
       (a, b) =>
-        Math.abs(Date.parse(a.commence_time) - Date.now()) -
-        Math.abs(Date.parse(b.commence_time) - Date.now())
+        Math.abs(Date.parse(a.commence_time) - (nextMatch.matchTime ? Date.parse(nextMatch.matchTime) : Date.now())) -
+        Math.abs(Date.parse(b.commence_time) - (nextMatch.matchTime ? Date.parse(nextMatch.matchTime) : Date.now()))
     );
 
   const event = targetEvents[0];
@@ -157,7 +160,8 @@ export async function getUpcomingMatchWinnerOdds(nextMatch: NextMatch): Promise<
       dateFormat: "iso",
     });
     const oddsResponse = await getJson<OddsResponse>(
-      API_BASE + "/sports/" + tournamentKey + "/events/" + event.id + "/odds?" + oddsParams.toString()
+      API_BASE + "/sports/" + tournamentKey + "/events/" + event.id + "/odds?" + oddsParams.toString(),
+      ODDS_CACHE_SECONDS
     );
 
     let spread: UpcomingOdds["spread"] = null;

@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { getEalaDashboardFromSupabase } from "../lib/supabase";
-import { getUpcomingMatchWinnerOdds } from "../lib/odds";
+import OddsWidget from "./odds-widget";
 import RefreshOnInterval from "./refresh";
 import ShareWidget from "./share-widget";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 43200;
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl =
@@ -229,7 +228,6 @@ function roundText(round: unknown) {
 
 export default async function Home() {
   const data = await getEalaDashboardFromSupabase();
-  const odds = await getUpcomingMatchWinnerOdds(data.nextMatch);
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://didalexwin.com";
   const structuredData = {
@@ -263,7 +261,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <RefreshOnInterval />
+      <RefreshOnInterval matchStart={data.nextMatch?.matchStartIso ?? null} />
 
       <div className="top-row">
         <h1 className="main-heading">
@@ -359,49 +357,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {(odds?.matchWinner || odds?.spread) && (
-        <section className="next-match-odds-section">
-          <div className="section-heading-row">
-            <h2 className="section-heading">NEXT MATCH ODDS</h2>
-          </div>
-          <div className="next-match-odds-card">
-            {odds.matchWinner && (
-              <div className="upcoming-odds">
-                <a className="odds-section-link" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">MATCH WINNER ODDS</a>
-                <div className="upcoming-odds-values">
-                  <a className="odds-row" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">
-                    <span className="odds-player">Alex Eala</span>
-                    <strong className="odds-price">{odds.matchWinner.eala}</strong>
-                  </a>
-                  <a className="odds-row" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">
-                    <span className="odds-player">{displayPersonName(odds.matchWinner.opponentName)}</span>
-                    <strong className="odds-price">{odds.matchWinner.opponent}</strong>
-                  </a>
-                </div>
-              </div>
-            )}
-            {odds.spread && (
-              <div className="upcoming-odds">
-                <a className="odds-section-link" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">HANDICAP SPREAD ODDS</a>
-                <div className="upcoming-odds-values">
-                  <a className="odds-row" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">
-                    <span className="odds-player">Alex Eala <span className="odds-spread">({odds.spread.ealaPoint > 0 ? "+" : ""}{odds.spread.ealaPoint})</span></span>
-                    <strong className="odds-price">{odds.spread.eala}</strong>
-                  </a>
-                  <a className="odds-row" href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">
-                    <span className="odds-player">{odds.spread.opponentName} <span className="odds-spread">({odds.spread.opponentPoint > 0 ? "+" : ""}{odds.spread.opponentPoint})</span></span>
-                    <strong className="odds-price">{odds.spread.opponent}</strong>
-                  </a>
-                </div>
-              </div>
-            )}
-            <div className="upcoming-bet-line">
-              <a href="https://bet88.ph?ref=didalexwin" target="_blank" rel="noopener noreferrer">Click here to bet.</a>
-              <span> Odds can change. Gamble responsibly. 21+ only</span>
-            </div>
-          </div>
-        </section>
-      )}
+      <OddsWidget nextMatch={data.nextMatch ? { tournament: data.nextMatch.tournament, opponent: data.nextMatch.opponent, matchTime: data.nextMatch.matchStartIso } : null} />
       <section className="recent-form-section">
         <div className="recent-form">
           <div className="recent-form-heading">

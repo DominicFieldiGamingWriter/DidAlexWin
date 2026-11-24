@@ -79,7 +79,7 @@ function isCurrentNextMatch(match: NextMatch, now = Date.now()) {
 async function fetchTable<T>(path: string): Promise<T[]> {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: SUPABASE_KEY },
-    cache: "no-store",
+    next: { revalidate: 43200, tags: ["eala-dashboard"] },
   });
   if (!response.ok) throw new Error(`Supabase returned ${response.status}`);
   return response.json();
@@ -295,6 +295,7 @@ export async function getEalaDashboardFromSupabase(): Promise<DashboardData> {
       tournamentStart: next.tournament_start ?? "",
       tournamentEnd: next.tournament_end ?? "",
       timeKnown: Boolean(next.match_start),
+      matchStartIso: next.match_start ?? null,
       matchTime: next.match_start
         ? new Date(next.match_start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" })
         : null,
